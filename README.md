@@ -18,6 +18,7 @@ $ cd $(PWD_FREESWITCH_SRC)
 echo 'endpoints/mod_apn' >> modules.conf
 # Add to configure.ac configuration for create Makefile for mod_apn (AC_CONFIG_FILES array section)
 $ sed -i '/src\/mod\/endpoints\/mod_sofia\/Makefile/a src\/mod\/endpoints\/mod_apn\/Makefile' configure.ac
+$ autoreconf -fvi
 $ ./configure
 $ make
 $ make install

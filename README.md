@@ -22,12 +22,12 @@ $ autoreconf -fvi
 $ ./configure
 $ make
 $ make install
-$ sudo cp /usr/src/freeswitch-1.10.11/src/mod/endpoints/mod_apn/.libs/mod_apn.so /usr/lib/freeswitch/mod/
 ```
 ## Configuration
 Change apn.conf.xml with your configuration of url to push server and all parameters.
 ```sh
 $ cp /usr/src/PushNotification/conf/autoload_configs/apn.conf.xml /etc/freeswitch/autoload_configs/
+$ sudo cp /usr/src/freeswitch-1.10.11/src/mod/endpoints/mod_apn/.libs/mod_apn.so /usr/lib/freeswitch/mod/
 ```
 
 ### Module configuration

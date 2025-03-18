@@ -137,7 +137,7 @@ Change your dial-string user's parameter for use endpoint `app_wait`
 ```
 ## Auto load
 ```sh
-$ sed -i '/<load module="mod_sofia"\/>/a <load module="mod_apn"\/>' /ect/freeswitch/modules.conf.xml
+$ sed -i '/<load module="mod_sofia"\/>/a <load module="mod_apn"\/>' /etc/freeswitch/autoload_configs/modules.conf.xml
 ```
 ## Manual load
 ```sh

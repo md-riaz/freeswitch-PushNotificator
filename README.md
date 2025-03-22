@@ -78,11 +78,11 @@ $ sudo cp /usr/src/freeswitch-1.10.11/src/mod/endpoints/mod_apn/.libs/mod_apn.so
     <!-- Supported methods: GET and POST -->
     <param name="method" value="post"/>
     <!-- Optional parameter. Supported auth types: None, JWT, DIGEST, BASIC -->
-    <param name="auth_type" value="digest"/>
+    <!--<param name="auth_type" value="digest"/> -->
     <!-- Optional parameter. For JWT add token only, for digest or basic: login:password -->
-    <param name="auth_data" value="admin:password"/>
+    <!--<param name="auth_data" value="admin:password"/> -->
     <!-- Optional parameter. Will be added header Content-Type with value from this parameter -->
-    <param name="content_type" value=""/>
+    <!--<param name="content_type" value=""/> -->
     <!-- Optional parameter. Libcurl connect_timeout parameter, sec -->
     <param name="connect_timeout" value="300"/>
     <!-- Optional parameter. CURL timeout parameter, sec -->

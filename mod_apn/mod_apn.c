@@ -210,8 +210,13 @@ static switch_bool_t mod_apn_send(switch_event_t *event, profile_t *profile)
 		return ret;
 	}
 
-	if (do_curl(event, profile) == 200) {
+	http_code = do_curl(event, profile);
+  
+	if (http_code >= 200 && http_code < 300) {
 		ret = SWITCH_TRUE;
+	} else {
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, 
+	    "APN request failed with HTTP code: %d\n", http_code);
 	}
 
 	return ret;

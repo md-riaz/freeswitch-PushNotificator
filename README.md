@@ -11,9 +11,8 @@ libcurl
 ```sh
 $ mkdir -p /usr/src && cd /usr/src/
 $ git clone https://github.com/sem32/freeswitch-PushNotification.git PushNotification
-# $(PWD_FREESWITCH_SRC) - path to freeswitch source files
-$ cp -a ./mod_apn $(PWD_FREESWITCH_SRC)/src/mod/endpoints/
-$ cd $(PWD_FREESWITCH_SRC)
+$ cp -a ./mod_apn /usr/src/freeswitch-1.10.11/src/mod/endpoints/
+$ cd /usr/src/freeswitch-1.10.11
 # Add to modules.conf parameter for build mod_apn
 echo 'endpoints/mod_apn' >> modules.conf
 # Add to configure.ac configuration for create Makefile for mod_apn (AC_CONFIG_FILES array section)

@@ -191,19 +191,18 @@ static int do_curl(switch_event_t *event, profile_t *profile)
 	switch_curl_easy_setopt(curl_handle, CURLOPT_NOSIGNAL, 1);
 	switch_curl_easy_setopt(curl_handle, CURLOPT_USERAGENT, "freeswitch-mod_apn/2.0");
 
-	CURLcode curl_status = switch_curl_easy_perform(curl_handle);
+	curl_status = switch_curl_easy_perform(curl_handle);
 	switch_curl_easy_getinfo(curl_handle, CURLINFO_RESPONSE_CODE, &httpRes);
 
-	  // Log curl status and HTTP response
-    if (curl_status != CURLE_OK) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, 
-            "CURL Error: %s, HTTP Code: %d\n", 
-            curl_easy_strerror(curl_status), httpRes);
-    } else {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, 
-            "CURL Success, HTTP Code: %d\n", 
-            httpRes);
-    }
+	if (curl_status != CURLE_OK) {
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, 
+	    "CURL Error: %s, HTTP Code: %d\n", 
+	    curl_easy_strerror(curl_status), httpRes);
+	} else {
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, 
+	    "CURL Success, HTTP Code: %d\n", 
+	    httpRes);
+	}
 
 	switch_curl_easy_cleanup(curl_handle);
 	switch_curl_slist_free_all(headers);

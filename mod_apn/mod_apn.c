@@ -126,6 +126,7 @@ static int do_curl(switch_event_t *event, profile_t *profile)
 	int httpRes = 0;
 	switch_curl_slist_t *headers = NULL;
 	char *query = NULL;
+	CURLcode curl_status;
 
 	const char *url_template = profile->url;
 	const char *method = profile->method;
@@ -190,8 +191,20 @@ static int do_curl(switch_event_t *event, profile_t *profile)
 	switch_curl_easy_setopt(curl_handle, CURLOPT_NOSIGNAL, 1);
 	switch_curl_easy_setopt(curl_handle, CURLOPT_USERAGENT, "freeswitch-mod_apn/2.0");
 
-	switch_curl_easy_perform(curl_handle);
+	CURLcode curl_status = switch_curl_easy_perform(curl_handle);
 	switch_curl_easy_getinfo(curl_handle, CURLINFO_RESPONSE_CODE, &httpRes);
+
+	  // Log curl status and HTTP response
+    if (curl_status != CURLE_OK) {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, 
+            "CURL Error: %s, HTTP Code: %d\n", 
+            curl_easy_strerror(curl_status), httpRes);
+    } else {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, 
+            "CURL Success, HTTP Code: %d\n", 
+            httpRes);
+    }
+
 	switch_curl_easy_cleanup(curl_handle);
 	switch_curl_slist_free_all(headers);
 
@@ -204,6 +217,7 @@ static int do_curl(switch_event_t *event, profile_t *profile)
 static switch_bool_t mod_apn_send(switch_event_t *event, profile_t *profile)
 {
 	switch_bool_t ret = SWITCH_FALSE;
+	int http_code;
 
 	if (!profile) {
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "CARUSTO. APN profile not found\n");
@@ -211,13 +225,14 @@ static switch_bool_t mod_apn_send(switch_event_t *event, profile_t *profile)
 	}
 
 	http_code = do_curl(event, profile);
-  
-	if (http_code >= 200 && http_code < 300) {
-		ret = SWITCH_TRUE;
-	} else {
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, 
-	    "APN request failed with HTTP code: %d\n", http_code);
-	}
+    
+
+    if (http_code >= 200 && http_code < 300) {
+        ret = SWITCH_TRUE;
+    } else {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, 
+            "APN request failed with HTTP code: %d\n", http_code);
+    }
 
 	return ret;
 }
@@ -1250,4 +1265,3 @@ SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_apn_shutdown)
 
 	return SWITCH_STATUS_SUCCESS;
 }
-

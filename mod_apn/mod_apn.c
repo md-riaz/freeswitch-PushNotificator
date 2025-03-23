@@ -1091,6 +1091,15 @@ static switch_call_cause_t apn_wait_outgoing_channel(switch_core_session_t *sess
 			switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "type", "voip");
 			switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "user", user);
 			switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "realm", domain);
+			
+			if(!zstr(cid_name_override)) {
+				switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "cid_name", cid_name_override);
+			}
+
+			if(!zstr(cid_num_override)) {
+				switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "cid_number", cid_num_override);
+			}
+			
 			switch_event_add_body(event, "{\"content-available\":true,\"custom\":[{\"name\":\"content-message\",\"value\":\"incomming call\"}]}");
 			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn:. Fire event APN for User: %s@%s\n", user, domain);
 			switch_event_fire(&event);

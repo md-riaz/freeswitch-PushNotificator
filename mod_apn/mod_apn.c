@@ -488,7 +488,7 @@ static switch_status_t do_config(switch_memory_pool_t *pool)
 	}
 
 	if (zstr(globals.odbc_dsn)) {
-		globals.dbname = "mod_apn:";
+		globals.dbname = "fusionpbx";
 		dbh = mod_apn_get_db_handle();
 	}
 

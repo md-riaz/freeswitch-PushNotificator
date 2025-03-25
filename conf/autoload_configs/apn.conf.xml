@@ -41,13 +41,13 @@
 		<profile name="voip">
 			<param name="id" value="0"/>
 			<!-- URI template parameter with variables: ${type}, ${user}, ${realm}, ${token}, ${app_id}, ${platform} -->
-			<param name="url" value="http://somedomain.com/?type=${type}&app_id=${app_id}&user=${user}&realm=${realm}&token=${token}&platform=${platform}&payload=${payload}&aleg_uuid=${aleg_uuid}"/>
+			<param name="url" value="http://somedomain.com/?type=${type}&app_id=${app_id}&user=${user}&realm=${realm}&token=${token}&platform=${platform}&payload=${payload}&aleg_uuid=${aleg_uuid}&cid_name=${cid_name}&cid_number=${cid_number}"/>
 			<!-- Supported methods: GET and POST -->
-			<param name="method" value="post"/>
+			<param name="method" value="get"/>
 			<!-- Optional parameter. Supported auth types: None, JWT, DIGEST, BASIC -->
-			<param name="auth_type" value="digest"/>
+			<!-- <param name="auth_type" value="digest"/> -->
 			<!-- Optional parameter. For JWT add token only, for digest or basic: login:password -->
-			<param name="auth_data" value="admin:password"/>
+			<!-- <param name="auth_data" value="admin:password"/> -->
 			<!-- Optional parameter. Will be added header Content-Type with value from this parameter -->
 			<param name="content_type" value=""/>
 			<!-- Optional parameter. Libcurl connect_timeout parameter, sec -->

@@ -1091,6 +1091,13 @@ static switch_call_cause_t apn_wait_outgoing_channel(switch_core_session_t *sess
 			switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "type", "voip");
 			switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "user", user);
 			switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "realm", domain);
+
+			// header ent_originate_aleg_uuid got the call uuid when in ring group
+			if ((var_val = switch_event_get_header(var_event, "ent_originate_aleg_uuid"))) {
+				switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "aleg_uuid", var_val);
+			} else {
+				switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "aleg_uuid", "");
+			}
 			
 			if(!zstr(cid_name_override)) {
 				switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "cid_name", cid_name_override);

@@ -994,7 +994,7 @@ static switch_call_cause_t apn_wait_outgoing_channel(switch_core_session_t *sess
 	switch_event_node_t *response_event = NULL, *register_event = NULL;
 	switch_channel_t *channel = NULL;
 	switch_memory_pool_t *pool = NULL;
-	char *cid_name_override = NULL, *cid_num_override = NULL;
+	const char *cid_name_override = NULL, *cid_num_override = NULL;
 	originate_register_t originate_data = { 0, };
 	char *destination = NULL;
 	switch_bool_t wait_any_register = SWITCH_FALSE;
@@ -1087,17 +1087,30 @@ static switch_call_cause_t apn_wait_outgoing_channel(switch_core_session_t *sess
 	/*Create event 'mobile::push::notification' for send push notification*/
 	if (!var_event || (var_event && (!(var_val = switch_event_get_header(var_event, "enable_send_apn")) || zstr(var_val) || switch_true(var_val)))) {
 		if (switch_event_create_subclass(&event, SWITCH_EVENT_CUSTOM, "mobile::push::notification") == SWITCH_STATUS_SUCCESS) {
-			switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "uuid", apn_response.uuid);
-			switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "type", "voip");
-			switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "user", user);
-			switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "realm", domain);
 
-			// header ent_originate_aleg_uuid got the call uuid when in ring group
+			// header ent_originate_aleg_uuid got the caller id for ring group
 			if ((var_val = switch_event_get_header(var_event, "ent_originate_aleg_uuid"))) {
 				switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "aleg_uuid", var_val);
 			} else {
 				switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "aleg_uuid", "");
 			}
+		
+			// get caller info
+			if (!cid_name_override) {
+				cid_name_override = outbound_profile->caller_id_name;
+			}
+
+			if (!cid_num_override) {
+				cid_num_override = outbound_profile->caller_id_number;
+			}
+
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "mod_apn: Outbound profile destination caller id name: %s\n", cid_name_override);
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "mod_apn: Outbound profile destination caller id number: %s\n", cid_num_override);
+			
+			switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "uuid", apn_response.uuid);
+			switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "type", "voip");
+			switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "user", user);
+			switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "realm", domain);
 			
 			if(!zstr(cid_name_override)) {
 				switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "cid_name", cid_name_override);

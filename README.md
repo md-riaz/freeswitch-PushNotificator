@@ -11,8 +11,8 @@ libcurl
 ```sh
 $ mkdir -p /usr/src && cd /usr/src/
 $ git clone https://github.com/sem32/freeswitch-PushNotification.git PushNotification
-$ cp -a ./mod_apn /usr/src/freeswitch-1.10.11/src/mod/endpoints/
-$ cd /usr/src/freeswitch-1.10.11
+$ cp -a ./PushNotification/mod_apn /usr/src/freeswitch/src/mod/endpoints/
+$ cd /usr/src/freeswitch
 # Add to modules.conf parameter for build mod_apn
 echo 'endpoints/mod_apn' >> modules.conf
 # Add to configure.ac configuration for create Makefile for mod_apn (AC_CONFIG_FILES array section)
@@ -26,7 +26,7 @@ $ make install
 Change apn.conf.xml with your configuration of url to push server and all parameters.
 ```sh
 $ cp /usr/src/PushNotification/conf/autoload_configs/apn.conf.xml /etc/freeswitch/autoload_configs/
-$ sudo cp /usr/src/freeswitch-1.10.11/src/mod/endpoints/mod_apn/.libs/mod_apn.so /usr/lib/freeswitch/mod/
+$ sudo cp /usr/src/freeswitch/src/mod/endpoints/mod_apn/.libs/mod_apn.so /usr/lib/freeswitch/mod/
 ```
 
 ### Module configuration

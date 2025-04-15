@@ -74,7 +74,7 @@ $ sudo cp /usr/src/freeswitch/src/mod/endpoints/mod_apn/.libs/mod_apn.so /usr/li
 <profile name="voip">
     <param name="id" value="0"/>
     <!-- URI template parameter with variables: ${type}, ${user}, ${realm}, ${token}, ${app_id}, ${platform} -->
-    <param name="url" value="http://somedomain.com/${type}/${realm}/${user}/${token}/${app_id}/${platform}"/>
+    <param name="url" value="http://somedomain.com/?type=${type}&app_id=${app_id}&user=${user}&realm=${realm}&token=${token}&platform=${platform}&payload=${payload}&aleg_uuid=${aleg_uuid}&cid_name=${cid_name}&cid_number=${cid_number}"/>
     <!-- Supported methods: GET and POST -->
     <param name="method" value="post"/>
     <!-- Optional parameter. Supported auth types: None, JWT, DIGEST, BASIC -->

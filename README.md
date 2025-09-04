@@ -7,6 +7,62 @@ Mod APN listens to `sofia::register` event and originate call when receive new R
 ```
 libcurl
 ```
+## Credential setup
+
+### Firebase service-account.json
+To authenticate a service account and authorize it to access Firebase services, you must generate a private key file in JSON format.
+
+To generate a private key file for your service account:
+1. In the [Firebase console](https://console.firebase.google.com/project/_/settings/serviceaccounts/adminsdk), open **Settings > Service Accounts**.
+2. Click **Generate New Private Key**, then confirm by clicking **Generate Key**.
+3. Securely store the JSON file containing the key and place it alongside `fcm_push.php` as `service-account.json`.
+
+### Apple APNs auth key
+1. Sign in to the [Apple Developer portal](https://developer.apple.com/).
+2. In **Certificates, Identifiers & Profiles**, create a new key and enable **Apple Push Notifications service (APNs)**.
+3. Download the resulting `AuthKey_<KEY_ID>.p8` file and rename it to `AuthKey.p8`, placing it alongside `fcm_push.php`.
+4. Record the **Key ID** and your **Team ID**; configure `APNS_KEY_ID`, `APNS_TEAM_ID`, and `APNS_BUNDLE_ID` constants in `fcm_push.php` with these values and your VoIP bundle identifier.
+5. For sandbox testing, change the `APNS_HOST` constant in `fcm_push.php` to `api.development.push.apple.com`.
+
+### Push token parameters
+
+The SIP `Contact` header and push requests use distinct fields so each notification type can provide its own token. `mod_apn`
+stores every token as a separate row in the `push_tokens` table with a `type` column and chooses the matching token before
+invoking `fcm_push.php`:
+
+- `pn-voip-tok` – VoIP token stored with `type` = `voip`.
+- `pn-im-tok` – IM token stored with `type` = `im`.
+- `pn-platform` – The device platform (iOS, Android, etc.).
+
+Use `type=voip` for incoming call events. The module looks up the `voip` row and wakes the app for CallKit or a foreground
+service.
+
+Use `type=im` for chat or text notifications so the `im` row is selected and delivered instead.
+
+### Example server payloads
+
+#### Android (FCM)
+```json
+{
+  "to": "<ANDROID_FCM_REG_TOKEN>",
+  "priority": "high",
+  "data": {
+    "type": "voip_call",
+    "callerId": "1234567890",
+    "callerName": "Alice"
+  }
+}
+```
+
+#### iOS (APNs VoIP)
+```json
+{
+  "aps": { "content-available": 1 },
+  "callerId": "1234567890",
+  "callerName": "Alice"
+}
+```
+
 ## Installation
 ```sh
 $ mkdir -p /usr/src && cd /usr/src/

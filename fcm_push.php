@@ -164,11 +164,9 @@ function sendVoipPushNotification($deviceToken, $data = [])
 {
     $jwt = getApnsJwt();
 
-    $payload = array_merge([
-        'aps' => [
-            'content-available' => 1
-        ]
-    ], $data);
+    // VoIP pushes don't require the aps dictionary when using the
+    // apns-push-type header, so send data directly as the payload.
+    $payload = $data;
 
     $ch = curl_init("https://" . APNS_HOST . "/3/device/{$deviceToken}");
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -250,16 +248,16 @@ try {
     $deviceToken = parseDeviceToken($inputData);
 
     $dataPayload = [
-        'type' => $inputData['type'],
-        'call_id' => $inputData['aleg_uuid'],
-        'sip_call_id' => $inputData['x_call_id'],
-        'app_id' => $inputData['app_id'],
-        'user' => $inputData['user'],
-        'realm' => $inputData['realm'],
+        'type' => $inputData['type'] ?? '',
+        'call_id' => $inputData['aleg_uuid'] ?? '',
+        'sip_call_id' => $inputData['x_call_id'] ?? '',
+        'app_id' => $inputData['app_id'] ?? '',
+        'user' => $inputData['user'] ?? '',
+        'realm' => $inputData['realm'] ?? '',
         'platform' => $inputData['platform'] ?? '',
         'cid_name' => $inputData['cid_name'] ?? '',
         'cid_number' => $inputData['cid_number'] ?? '',
-        'payload' => $inputData['payload']
+        'payload' => json_decode($inputData['payload'] ?? 'null', true)
     ];
 
     $type = strtolower($inputData['type'] ?? '');

@@ -40,8 +40,8 @@
 	<profiles>
 		<profile name="voip">
 			<param name="id" value="0"/>
-			<!-- URI template parameter with variables: ${type}, ${user}, ${realm}, ${token}, ${app_id}, ${platform} -->
-			<param name="url" value="http://somedomain.com/?type=${type}&app_id=${app_id}&user=${user}&realm=${realm}&token=${token}&platform=${platform}&payload=${payload}&aleg_uuid=${aleg_uuid}&cid_name=${cid_name}&cid_number=${cid_number}"/>
+                        <!-- URI template parameter with variables: ${type}, ${user}, ${realm}, ${token}, ${app_id}, ${platform}, ${x_call_id} -->
+                        <param name="url" value="http://somedomain.com/?type=${type}&app_id=${app_id}&user=${user}&realm=${realm}&token=${token}&platform=${platform}&payload=${payload}&aleg_uuid=${aleg_uuid}&cid_name=${cid_name}&cid_number=${cid_number}&x_call_id=${x_call_id}"/>
 			<!-- Supported methods: GET and POST -->
 			<param name="method" value="get"/>
 			<!-- Optional parameter. Supported auth types: None, JWT, DIGEST, BASIC -->
@@ -59,9 +59,10 @@
 					${app_id}, - application id from db (whatever you set to `contact_app_id_param`)
 					${user}, - user extension number
 					${realm}, - Realm
-					${token}, - token
-					${platform} - platform (whatever you set to `contact_platform_param`)
-					${payload} - json body of payload (cli command apn only)
+                                        ${token}, - token
+                                        ${platform} - platform (whatever you set to `contact_platform_param`)
+                                        ${payload} - json body of payload (cli command apn only)
+                                        ${x_call_id} - SIP Call-ID for correlation
 				Default value: {"type": "${type}",
 								"app":"${app_id}",
 								"token":"${token}",
@@ -70,7 +71,7 @@
 								"payload":${payload},
 								"platform":"${platform}"}
 			-->
-			<param name="post_data_template" value="type=${type}&app_id=${app_id}&user=${user}&realm=${realm}&token=${token}&platform=${platform}&payload=${payload}&uuid=${uuid}"/>
+                        <param name="post_data_template" value="type=${type}&app_id=${app_id}&user=${user}&realm=${realm}&token=${token}&platform=${platform}&payload=${payload}&uuid=${uuid}&x_call_id=${x_call_id}"/>
 		</profile>
 
 		<profile name="im">
@@ -82,7 +83,7 @@
 			<param name="content_type" value=""/>
 			<param name="connect_timeout" value="300"/>
 			<param name="timeout" value="0"/>
-			<param name="post_data_template" value="type=${type}&app_id=${app_id}&user=${user}&realm=${realm}&token=${token}&platform=${platform}&payload=${payload}"/>
+                        <param name="post_data_template" value="type=${type}&app_id=${app_id}&user=${user}&realm=${realm}&token=${token}&platform=${platform}&payload=${payload}&x_call_id=${x_call_id}"/>
 		</profile>
 	</profiles>
 </configuration>

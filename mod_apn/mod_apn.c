@@ -319,12 +319,12 @@ static int sql2str_callback(void *pArg, int argc, char **argv, char **columnName
 	return 0;
 }
 
-#define APN_USAGE """{\"uuid\":\"\",\"realm\":\"\",\"user\":\"\",\"type\":\"[im|voip]\",\"payload\":{\"body\":\"\",\"sound\":\"\",\"\":[{\"name\":\"\",\"value\":\"\"},\"image\":\"\",\"category\":\"\"}}"""
+#define APN_USAGE """{\"uuid\":\"\",\"realm\":\"\",\"user\":\"\",\"x_call_id\":\"\",\"type\":\"[im|voip]\",\"payload\":{\"body\":\"\",\"sound\":\"\",\"custom\":[{\"name\":\"\",\"value\":\"\"}],\"image\":\"\",\"category\":\"\"}}"""
 SWITCH_STANDARD_API(apn_api_function)
 {
 	char *pdata = NULL, *json_payload = NULL;
 	cJSON *root = NULL, *payload = NULL;
-	switch_event_t *event = NULL;
+        switch_event_t *event = NULL;
 	switch_status_t res = SWITCH_STATUS_FALSE;
 
 	if (cmd) {
@@ -353,10 +353,11 @@ SWITCH_STANDARD_API(apn_api_function)
 		json_payload = cJSON_PrintUnformatted(payload);
 		switch_event_add_body(event, json_payload);
 	}
-	switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "type", cJSON_GetObjectCstr(root, "type"));
-	switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "user", cJSON_GetObjectCstr(root, "user"));
-	switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "realm", cJSON_GetObjectCstr(root, "realm"));
-	switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "uuid", cJSON_GetObjectCstr(root, "uuid"));
+        switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "type", cJSON_GetObjectCstr(root, "type"));
+        switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "user", cJSON_GetObjectCstr(root, "user"));
+        switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "realm", cJSON_GetObjectCstr(root, "realm"));
+        switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "uuid", cJSON_GetObjectCstr(root, "uuid"));
+        switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "x_call_id", cJSON_GetObjectCstr(root, "x_call_id"));
 
 	push_event_handler(event);
 
@@ -564,12 +565,13 @@ static switch_status_t do_config(switch_memory_pool_t *pool)
 				}
 				if (!zstr(post_data_template)) {
 					profile->post_data_template = switch_core_strdup(globals.pool, post_data_template);
-				} else {
-					profile->post_data_template = switch_core_strdup(globals.pool, "{\"type\": \"${type}\",\"app\":\"${app_id}\","
-																				   "\"token\":\"${token}\",\"user\":\"${user}\","
-																				   "\"realm\":\"${realm}\",\"payload\":${payload}"
-																				   "\"platform\":\"${platform}\"}");
-				}
+                                } else {
+                                        profile->post_data_template = switch_core_strdup(globals.pool,
+                                                "{\"type\": \"${type}\",\"app\":\"${app_id}\"," \
+                                                "\"token\":\"${token}\",\"user\":\"${user}\"," \
+                                                "\"realm\":\"${realm}\",\"payload\":${payload}," \
+                                                "\"platform\":\"${platform}\",\"x_call_id\":\"${x_call_id}\"}");
+                                }
 				profile->auth = parse_auth_param(auth_type, auth_data, globals.pool);
 				if (!zstr(content_type)) {
 					profile->content_type = switch_core_strdup(globals.pool, content_type);
@@ -622,7 +624,7 @@ static void add_item_to_event(switch_event_t *event, char *name, cJSON *obj)
 
 static void push_event_handler(switch_event_t *event)
 {
-	char *payload = NULL, *user = NULL, *realm = NULL, *type = NULL, *uuid = NULL, *json_tokens = NULL;
+        char *payload = NULL, *user = NULL, *realm = NULL, *type = NULL, *uuid = NULL, *x_call_id = NULL, *json_tokens = NULL;
 	profile_t *profile = NULL;
 	callback_t cbt = { cJSON_CreateArray() };
 	switch_bool_t res = SWITCH_FALSE;
@@ -630,11 +632,12 @@ static void push_event_handler(switch_event_t *event)
 	int size, i;
 	switch_event_t *res_event;
 
-	payload = switch_event_get_body(event);
-	type = switch_event_get_header(event, "type");
-	user = switch_event_get_header(event, "user");
-	realm = switch_event_get_header(event, "realm");
-	uuid = switch_event_get_header(event, "uuid");
+        payload = switch_event_get_body(event);
+        type = switch_event_get_header(event, "type");
+        user = switch_event_get_header(event, "user");
+        realm = switch_event_get_header(event, "realm");
+        uuid = switch_event_get_header(event, "uuid");
+        x_call_id = switch_event_get_header(event, "x_call_id");
 
 	if (zstr(type) || zstr(user) || zstr(realm)) {
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn:. No parameters, data: '%s', type: '%s', user: '%s', realm: '%s'\n", payload, type, user, realm);
@@ -669,13 +672,16 @@ static void push_event_handler(switch_event_t *event)
 	}
 
 end:
-	if (!zstr(uuid) && switch_event_create_subclass(&res_event, SWITCH_EVENT_CUSTOM, "mobile::push::response") == SWITCH_STATUS_SUCCESS) {
-		switch_event_add_header_string(res_event, SWITCH_STACK_BOTTOM, "uuid", uuid);
-		switch_event_add_header_string(res_event, SWITCH_STACK_BOTTOM, "response", res ? "sent" : "notsent");
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn:. Fire event mobile::push::response with ID: '%s' and result: '%s'\n", uuid, res ? "sent" : "notsent");
-		switch_event_fire(&res_event);
-		switch_event_destroy(&res_event);
-	}
+        if (!zstr(uuid) && switch_event_create_subclass(&res_event, SWITCH_EVENT_CUSTOM, "mobile::push::response") == SWITCH_STATUS_SUCCESS) {
+                switch_event_add_header_string(res_event, SWITCH_STACK_BOTTOM, "uuid", uuid);
+                if (!zstr(x_call_id)) {
+                        switch_event_add_header_string(res_event, SWITCH_STACK_BOTTOM, "x_call_id", x_call_id);
+                }
+                switch_event_add_header_string(res_event, SWITCH_STACK_BOTTOM, "response", res ? "sent" : "notsent");
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn:. Fire event mobile::push::response with ID: '%s' and result: '%s'\n", uuid, res ? "sent" : "notsent");
+                switch_event_fire(&res_event);
+                switch_event_destroy(&res_event);
+        }
 
 	switch_safe_free(json_tokens);
 
@@ -994,7 +1000,8 @@ static switch_call_cause_t apn_wait_outgoing_channel(switch_core_session_t *sess
 	switch_event_node_t *response_event = NULL, *register_event = NULL;
 	switch_channel_t *channel = NULL;
 	switch_memory_pool_t *pool = NULL;
-	const char *cid_name_override = NULL, *cid_num_override = NULL;
+        const char *cid_name_override = NULL, *cid_num_override = NULL;
+        const char *x_call_id = NULL;
 	originate_register_t originate_data = { 0, };
 	char *destination = NULL;
 	switch_bool_t wait_any_register = SWITCH_FALSE;
@@ -1002,10 +1009,10 @@ static switch_call_cause_t apn_wait_outgoing_channel(switch_core_session_t *sess
 	switch_time_t start = 0;
 	int diff = 0;
 
-	if (var_event && !zstr(switch_event_get_header(var_event, "originate_reg_token"))) {
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn: Skip originate in case have custom originate token registration\n");
-		return cause;
-	}
+        if (var_event && !zstr(switch_event_get_header(var_event, "originate_reg_token"))) {
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn: Skip originate in case have custom originate token registration\n");
+                return cause;
+        }
 
 	start = switch_epoch_time_now(NULL);
 	switch_core_new_memory_pool(&pool);
@@ -1014,9 +1021,9 @@ static switch_call_cause_t apn_wait_outgoing_channel(switch_core_session_t *sess
 		return cause;
 	}
 
-	if (session) {
-		channel = switch_core_session_get_channel(session);
-	}
+        if (session) {
+                channel = switch_core_session_get_channel(session);
+        }
 
 	if (!outbound_profile || zstr(outbound_profile->destination_number)) {
 		goto done;
@@ -1041,16 +1048,17 @@ static switch_call_cause_t apn_wait_outgoing_channel(switch_core_session_t *sess
 	switch_uuid_str(apn_response.uuid, sizeof(apn_response.uuid));
 	switch_mutex_init(&apn_response.mutex, SWITCH_MUTEX_NESTED, pool);
 
-	if (var_event) {
-		cid_name_override = switch_event_get_header(var_event, "origination_caller_id_name");
-		cid_num_override = switch_event_get_header(var_event, "origination_caller_id_number");
-		if ((var_val = switch_event_get_header(var_event, "originate_timeout"))) {
-			int tmp = (int)strtol(var_val, NULL, 10);
-			if (tmp > 0) {
-				timelimit_sec = (uint32_t) tmp;
-			}
-		}
-	}
+        if (var_event) {
+                cid_name_override = switch_event_get_header(var_event, "origination_caller_id_name");
+                cid_num_override = switch_event_get_header(var_event, "origination_caller_id_number");
+                x_call_id = switch_event_get_header(var_event, "sip_call_id");
+                if ((var_val = switch_event_get_header(var_event, "originate_timeout"))) {
+                        int tmp = (int)strtol(var_val, NULL, 10);
+                        if (tmp > 0) {
+                                timelimit_sec = (uint32_t) tmp;
+                        }
+                }
+        }
 
 	if (timelimit_sec <= 0) {
 		timelimit_sec = 60;
@@ -1075,7 +1083,7 @@ static switch_call_cause_t apn_wait_outgoing_channel(switch_core_session_t *sess
 	originate_data.timelimit = &current_timelimit;
 
 	/*Bind to event 'sofia::register' for originate call to registration*/
-	switch_event_bind_removable("apn_originate_register", SWITCH_EVENT_CUSTOM, "sofia::register", originate_register_event_handler, &originate_data, &register_event);
+        switch_event_bind_removable("apn_originate_register", SWITCH_EVENT_CUSTOM, "sofia::register", originate_register_event_handler, &originate_data, &register_event);
 
 	if (wait_any_register == SWITCH_FALSE) {
 		if ((switch_event_bind_removable(modname, SWITCH_EVENT_CUSTOM, "mobile::push::response", response_event_handler, &apn_response, &response_event) != SWITCH_STATUS_SUCCESS)) {
@@ -1088,12 +1096,19 @@ static switch_call_cause_t apn_wait_outgoing_channel(switch_core_session_t *sess
 	if (!var_event || (var_event && (!(var_val = switch_event_get_header(var_event, "enable_send_apn")) || zstr(var_val) || switch_true(var_val)))) {
 		if (switch_event_create_subclass(&event, SWITCH_EVENT_CUSTOM, "mobile::push::notification") == SWITCH_STATUS_SUCCESS) {
 
-			// header ent_originate_aleg_uuid got the caller id for ring group
-			if ((var_val = switch_event_get_header(var_event, "ent_originate_aleg_uuid"))) {
-				switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "aleg_uuid", var_val);
-			} else {
-				switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "aleg_uuid", "");
-			}
+                        // header ent_originate_aleg_uuid got the caller id for ring group
+                        if ((var_val = switch_event_get_header(var_event, "ent_originate_aleg_uuid"))) {
+                                switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "aleg_uuid", var_val);
+                        } else {
+                                switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "aleg_uuid", "");
+                        }
+                        if (!x_call_id && channel) {
+                                x_call_id = switch_channel_get_variable(channel, "sip_call_id");
+                        }
+                        if (!zstr(x_call_id)) {
+                                /* include SIP Call-ID so external services can correlate the push with the call */
+                                switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "x_call_id", x_call_id);
+                        }
 		
 			// get caller info
 			if (!cid_name_override) {
@@ -1120,7 +1135,11 @@ static switch_call_cause_t apn_wait_outgoing_channel(switch_core_session_t *sess
 				switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "cid_number", cid_num_override);
 			}
 			
-			switch_event_add_body(event, "{\"content-available\":true,\"custom\":[{\"name\":\"content-message\",\"value\":\"incomming call\"}]}");
+                        {
+                                char *body = switch_mprintf("{\"content-available\":true,\"custom\":[{\"name\":\"content-message\",\"value\":\"incomming call\"}],\"x_call_id\":\"%s\"}", x_call_id ? x_call_id : "");
+                                switch_event_add_body(event, body);
+                                switch_safe_free(body);
+                        }
 			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn:. Fire event APN for User: %s@%s\n", user, domain);
 			switch_event_fire(&event);
 			switch_event_destroy(&event);

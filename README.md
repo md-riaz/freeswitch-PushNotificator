@@ -73,8 +73,8 @@ $ sudo cp /usr/src/freeswitch/src/mod/endpoints/mod_apn/.libs/mod_apn.so /usr/li
 ```xml
 <profile name="voip">
     <param name="id" value="0"/>
-    <!-- URI template parameter with variables: ${type}, ${user}, ${realm}, ${token}, ${app_id}, ${platform} -->
-    <param name="url" value="http://somedomain.com/?type=${type}&app_id=${app_id}&user=${user}&realm=${realm}&token=${token}&platform=${platform}&payload=${payload}&aleg_uuid=${aleg_uuid}&cid_name=${cid_name}&cid_number=${cid_number}"/>
+    <!-- URI template parameter with variables: ${type}, ${user}, ${realm}, ${token}, ${app_id}, ${platform}, ${x_call_id} -->
+    <param name="url" value="http://somedomain.com/?type=${type}&app_id=${app_id}&user=${user}&realm=${realm}&token=${token}&platform=${platform}&payload=${payload}&aleg_uuid=${aleg_uuid}&cid_name=${cid_name}&cid_number=${cid_number}&x_call_id=${x_call_id}"/>
     <!-- Supported methods: GET and POST -->
     <param name="method" value="post"/>
     <!-- Optional parameter. Supported auth types: None, JWT, DIGEST, BASIC -->
@@ -95,6 +95,7 @@ $ sudo cp /usr/src/freeswitch/src/mod/endpoints/mod_apn/.libs/mod_apn.so /usr/li
             ${token}, - token
             ${platform} - platform (whatever you set to `contact_platform_param`)
             ${payload} - json body of payload (cli command apn only)
+            ${x_call_id} - SIP Call-ID for correlation
         Default value: {"type": "${type}",
                         "app":"${app_id}",
                         "token":"${token}",
@@ -103,7 +104,7 @@ $ sudo cp /usr/src/freeswitch/src/mod/endpoints/mod_apn/.libs/mod_apn.so /usr/li
                         "payload":${payload},
                         "platform":"${platform}"}
     -->
-    <param name="post_data_template" value="type=${type}&app_id=${app_id}&user=${user}&realm=${realm}&token=${token}&platform=${platform}&payload=${payload}"/>
+    <param name="post_data_template" value="type=${type}&app_id=${app_id}&user=${user}&realm=${realm}&token=${token}&platform=${platform}&payload=${payload}&x_call_id=${x_call_id}"/>
 </profile>
 ```
 
@@ -114,6 +115,7 @@ You can configure `url` and `body` for your http request with template variables
  - `${user}` - extension of device tokens owner
  - `${type}` - type of token (voip or im)
  - `${realm}` - realm name
+ - `${x_call_id}` - SIP Call-ID for correlation
 ##### Stored in db (from `Contact` parameters of SIP REGISTER)
  - `${token}` - pn-token
  - `${app_id}` - application id
@@ -157,6 +159,7 @@ After receiving SIP REGISTER, module will originate INVITE to `User 101`.
 `type`: 'voip' or 'im'<br>
 `realm`: string value of realm name<br>
 `user`: string value of user extension<br>
+`x_call_id`: SIP Call-ID for correlation<br>
 #### body (optional)
 JSON object with payload data
 `body` - string valueg<br>

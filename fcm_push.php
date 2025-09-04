@@ -88,12 +88,6 @@ function parseDeviceToken($input)
     if (!empty($input['token'])) {
         return $input['token'];
     }
-    if (!empty($input['pn-voip-tok'])) {
-        return $input['pn-voip-tok'];
-    }
-    if (!empty($input['pn-im-tok'])) {
-        return $input['pn-im-tok'];
-    }
     throw new Exception('Device token not found in the request.');
 }
 
@@ -262,7 +256,7 @@ try {
         'app_id' => $inputData['app_id'],
         'user' => $inputData['user'],
         'realm' => $inputData['realm'],
-        'platform' => $inputData['platform'] ?? $inputData['pn-platform'],
+        'platform' => $inputData['platform'] ?? '',
         'cid_name' => $inputData['cid_name'] ?? '',
         'cid_number' => $inputData['cid_number'] ?? '',
         'payload' => $inputData['payload']

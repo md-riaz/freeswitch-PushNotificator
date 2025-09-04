@@ -887,7 +887,7 @@ static void register_event_handler(switch_event_t *event)
 			switch_safe_free(query);
 		} else {
 			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn:. VoIP token: '%s' for user %s@%s and application: %s already exists\n", voip_token, event_user, event_realm, app_id);
-			query = switch_mprintf("UPDATE push_tokens SET last_update = CURRENT_TIMESTAMP WHERE token = '%q' AND extension = '%q' AND realm = '%q' AND app_id = '%q' AND type = 'voip'", im_token, event_user, event_realm, app_id);
+                       query = switch_mprintf("UPDATE push_tokens SET last_update = CURRENT_TIMESTAMP WHERE token = '%q' AND extension = '%q' AND realm = '%q' AND app_id = '%q' AND type = 'voip'", voip_token, event_user, event_realm, app_id);
 			execute_sql_now(&query);
 			switch_safe_free(query);
 		}

@@ -100,15 +100,11 @@ function parseDeviceToken($input)
 /**
  * Send FCM push notification using JSON payload.
  */
-function sendPushNotification($token, $deviceToken, $projectId, $title, $body, $data = [])
+function sendPushNotification($token, $deviceToken, $projectId, $data = [])
 {
     $payload = [
         'message' => [
             'token' => $deviceToken,
-            'notification' => [
-                'title' => $title,
-                'body' => $body
-            ],
             'data' => $data,
             'android' => [
                 'priority' => 'high'
@@ -119,11 +115,7 @@ function sendPushNotification($token, $deviceToken, $projectId, $title, $body, $
                 ],
                 'payload' => [
                     'aps' => [
-                        'alert' => [
-                            'title' => $title,
-                            'body' => $body
-                        ],
-                        'sound' => 'default'
+                        'content-available' => 1
                     ]
                 ]
             ]
@@ -162,6 +154,9 @@ function getApnsJwt()
     $signature = '';
     $keyContent = file_get_contents(APNS_AUTH_KEY);
     $privateKey = openssl_pkey_get_private($keyContent);
+    if (!$privateKey) {
+        throw new Exception('Failed to parse APNs private key. Ensure it is a valid, unencrypted .p8 file.');
+    }
     openssl_sign("$header.$claims", $signature, $privateKey, 'sha256');
     openssl_free_key($privateKey);
 
@@ -171,17 +166,13 @@ function getApnsJwt()
 /**
  * Send VoIP push notification directly via APNs.
  */
-function sendVoipPushNotification($deviceToken, $title, $body, $data = [])
+function sendVoipPushNotification($deviceToken, $data = [])
 {
     $jwt = getApnsJwt();
 
     $payload = array_merge([
         'aps' => [
-            'content-available' => 1,
-            'alert' => [
-                'title' => $title,
-                'body' => $body
-            ]
+            'content-available' => 1
         ]
     ], $data);
 
@@ -264,8 +255,6 @@ try {
 
     $deviceToken = parseDeviceToken($inputData);
 
-    $title = !empty($inputData['cid_name']) ? $inputData['cid_name'] : 'Incoming Call';
-    $body = !empty($inputData['cid_number']) ? $inputData['cid_number'] : 'You have an incoming call.';
     $dataPayload = [
         'type' => $inputData['type'],
         'call_id' => $inputData['aleg_uuid'],
@@ -274,6 +263,8 @@ try {
         'user' => $inputData['user'],
         'realm' => $inputData['realm'],
         'platform' => $inputData['platform'] ?? $inputData['pn-platform'],
+        'cid_name' => $inputData['cid_name'] ?? '',
+        'cid_number' => $inputData['cid_number'] ?? '',
         'payload' => $inputData['payload']
     ];
 
@@ -281,11 +272,11 @@ try {
     $platform = strtolower($inputData['platform'] ?? $inputData['pn-platform'] ?? '');
 
     if ($type === 'voip' && $platform === 'ios') {
-        sendVoipPushNotification($deviceToken, $title, $body, $dataPayload);
+        sendVoipPushNotification($deviceToken, $dataPayload);
     } else {
         $credentials = getFirebaseCredentials();
         $accessToken = getAccessToken($credentials);
-        sendPushNotification($accessToken, $deviceToken, $credentials['project_id'], $title, $body, $dataPayload);
+        sendPushNotification($accessToken, $deviceToken, $credentials['project_id'], $dataPayload);
     }
 
     logMessage("Push notification sent to device token: $deviceToken with data: " . json_encode($inputData)); // Log success

@@ -10,7 +10,7 @@ libcurl
 ## Installation
 ```sh
 $ mkdir -p /usr/src && cd /usr/src/
-$ git clone https://github.com/sem32/freeswitch-PushNotification.git PushNotification
+$ git clone https://github.com/md-riaz/freeswitch-PushNotification.git PushNotification
 $ cp -a ./PushNotification/mod_apn /usr/src/freeswitch/src/mod/endpoints/
 $ cd /usr/src/freeswitch
 # Add to modules.conf parameter for build mod_apn

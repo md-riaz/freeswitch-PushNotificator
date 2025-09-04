@@ -54,7 +54,6 @@ Use `type=im` for chat or text notifications so `pn-im-tok` is delivered instead
 #### iOS (APNs VoIP)
 ```json
 {
-  "aps": { "content-available": 1 },
   "cid_number": "1234567890",
   "cid_name": "Alice"
 }
@@ -202,6 +201,11 @@ Any platform devices (iOS based, Android based, browser based) application sent 
 ```
 Contact: "101" <sip:101@192.168.31.100:56568;app-id=****;pn-voip-tok=XXXXXXXXX;pn-im-tok=XXXXXXXXXX;pn-platform=iOS>
 ```
+- `app-id`
+- `pn-voip-tok`
+- `pn-im-tok` (Used for iOS instant messaging, no need of used for voip only)
+- `pn-platform`
+
 Mod APN store to db tokens when parse `Contact` header from REGISTER<br>
 In case if Freeswitch will genarate to `User 101` a call, endpoint `apn_wait` will send http request to push notification service with token ID and wait for incoming REGISTER request from current user.<br>
 After receiving SIP REGISTER, module will originate INVITE to `User 101`.

@@ -30,7 +30,7 @@ The SIP `Contact` header and push requests use distinct fields so each notificat
 
 - `pn-voip-tok` – The token used for VoIP push notifications.
 - `pn-im-tok` – The token used for instant messaging (IM) push notifications.
-- `pn-platform` – The device platform (iOS, Android, etc.).
+- `pn-platform` – The device platform (lowercase ios, android, etc.).
 
 Use `type=voip` for incoming call events so the module selects `pn-voip-tok` and wakes the app for CallKit or a foreground service.
 
@@ -44,9 +44,9 @@ Use `type=im` for chat or text notifications so `pn-im-tok` is delivered instead
   "to": "<ANDROID_FCM_REG_TOKEN>",
   "priority": "high",
   "data": {
-    "type": "voip_call",
-    "callerId": "1234567890",
-    "callerName": "Alice"
+    "type": "voip",
+    "cid_number": "1234567890",
+    "cid_name": "Alice"
   }
 }
 ```
@@ -55,8 +55,8 @@ Use `type=im` for chat or text notifications so `pn-im-tok` is delivered instead
 ```json
 {
   "aps": { "content-available": 1 },
-  "callerId": "1234567890",
-  "callerName": "Alice"
+  "cid_number": "1234567890",
+  "cid_name": "Alice"
 }
 ```
 

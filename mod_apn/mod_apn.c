@@ -1202,8 +1202,8 @@ static switch_call_cause_t apn_wait_outgoing_channel(switch_core_session_t *sess
 	switch_event_node_t *response_event = NULL, *register_event = NULL;
 	switch_channel_t *channel = NULL;
 	switch_memory_pool_t *pool = NULL;
-	const char *cid_name_override = NULL, *cid_num_override = NULL;
-	const char *x_call_id = NULL;
+       const char *cid_name_override = NULL, *cid_num_override = NULL;
+       const char *x_call_id = "";
 	originate_register_t originate_data = {
 		0,
 	};
@@ -1348,10 +1348,10 @@ static switch_call_cause_t apn_wait_outgoing_channel(switch_core_session_t *sess
 			{
 				switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "aleg_uuid", "");
 			}
-			if (!x_call_id && channel)
-			{
-				x_call_id = switch_channel_get_variable(channel, "sip_call_id");
-			}
+                       if (zstr(x_call_id) && channel)
+                       {
+                               x_call_id = switch_channel_get_variable(channel, "sip_call_id");
+                       }
 			if (!zstr(x_call_id))
 			{
 				/* include SIP Call-ID so external services can correlate the push with the call */

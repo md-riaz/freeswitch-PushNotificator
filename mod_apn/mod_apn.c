@@ -9,7 +9,7 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_apn_load);
 SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_apn_shutdown);
 SWITCH_MODULE_DEFINITION(mod_apn, mod_apn_load, mod_apn_shutdown, NULL);
 
-#define SWITCH_LESS_THAN(x, y)                               \
+#define SWITCH_LESS_THAN(x, y)				     \
 	(((FS_VERSION_MAJOR == x) && (FS_VERSION_MINOR == y)) || \
 	 ((FS_VERSION_MAJOR == x) && (FS_VERSION_MINOR < y)) || (FS_VERSION_MAJOR < x))
 
@@ -360,7 +360,7 @@ static int sql2str_callback(void *pArg, int argc, char **argv, char **columnName
 	return 0;
 }
 
-#define APN_USAGE ""                                                                                                                                                                                                               \
+#define APN_USAGE ""																										   \
 				  "{\"uuid\":\"\",\"realm\":\"\",\"user\":\"\",\"x_call_id\":\"\",\"type\":\"[im|voip]\",\"payload\":{\"body\":\"\",\"sound\":\"\",\"custom\":[{\"name\":\"\",\"value\":\"\"}],\"image\":\"\",\"category\":\"\"}}" \
 				  ""
 SWITCH_STANDARD_API(apn_api_function)
@@ -920,24 +920,28 @@ static void originate_register_event_handler(switch_event_t *event)
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn:. No destination contact data string\n");
 		goto end;
 	}
-
-	if (*originate_data->timelimit <= 0)
-	{
-		// Prevent negative or zero timelimit
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn: Invalid timelimit_sec before try originate (%d), skipping originate for callId '%s'\n", *originate_data->timelimit, originate_data->x_call_id);
-		return;
-	}
-	else if (*originate_data->timelimit > 30)
-	{
-		// Clamp to maximum allowed value
-		timelimit_sec = 30;
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn: Invalid timelimit_sec before try originate (%d), resetting current_timelimit to default 30s for callId '%s'\n", *originate_data->timelimit, originate_data->x_call_id);
-	}
-	else
-	{
-		// Use valid positive value
-		timelimit_sec = *originate_data->timelimit;
-	}
+        if (!originate_data->timelimit)
+        {
+                timelimit_sec = 30;
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn: Missing timelimit before try originate, resetting current_timelimit to default 30s for callId '%s'\n", originate_data->x_call_id);
+        }
+        else if (*originate_data->timelimit <= 0)
+        {
+                // Prevent negative or zero timelimit
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn: Invalid timelimit_sec before try originate (%d), skipping originate for callId '%s'\n", *originate_data->timelimit, originate_data->x_call_id);
+                return;
+        }
+        else if (*originate_data->timelimit > 30)
+        {
+                // Clamp to maximum allowed value
+                timelimit_sec = 30;
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn: Invalid timelimit_sec before try originate (%d), resetting current_timelimit to default 30s for callId '%s'\n", *originate_data->timelimit, originate_data->x_call_id);
+        }
+        else
+        {
+                // Use valid positive value
+                timelimit_sec = *originate_data->timelimit;
+        }
 
 	destination = switch_mprintf("[registration_token=%s,originate_timeout=%u]sofia/%s/%s:_:[originate_timeout=%u,enable_send_apn=false,apn_wait_any_register=%s]apn_wait/%s@%s",
 								 event_call_id,
@@ -1123,7 +1127,7 @@ static int init_sql(void)
 		"app_id			VARCHAR(255) NOT NULL,"
 		"type			VARCHAR(255) NOT NULL,"
 		"platform	    VARCHAR(255) NOT NULL,"
-		"last_update    timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+		"last_update	timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,"
 		"CONSTRAINT push_tokens_pkey PRIMARY KEY (id)"
 		");";
 
@@ -1346,10 +1350,10 @@ static switch_call_cause_t apn_wait_outgoing_channel(switch_core_session_t *sess
 			{
 				switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "aleg_uuid", "");
 			}
-                       if (zstr(x_call_id) && channel)
-                       {
-                               x_call_id = switch_channel_get_variable(channel, "sip_call_id");
-                       }
+		       if (zstr(x_call_id) && channel)
+		       {
+			       x_call_id = switch_channel_get_variable(channel, "sip_call_id");
+		       }
 			if (!zstr(x_call_id))
 			{
 				/* include SIP Call-ID so external services can correlate the push with the call */

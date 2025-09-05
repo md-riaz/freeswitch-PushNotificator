@@ -954,8 +954,6 @@ static void originate_register_event_handler(switch_event_t *event)
 	switch_mutex_unlock(handles_mutex);
 
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn:. Try originate to '%s' (by registration event) for callId '%s' \n", destination, originate_data->x_call_id);
-
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn:. Try originate to '%s' (by registration event) for callId '%s' \n", destination, originate_data->x_call_id);
 	switch_safe_free(destination);
 	switch_safe_free(dest);
 }

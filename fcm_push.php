@@ -208,14 +208,23 @@ function httpPost($url, $data, $headers)
     curl_setopt($ch, CURLOPT_POST, true);
     curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
     curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
 
     $result = curl_exec($ch);
 
     if (curl_errno($ch)) {
-        throw new Exception('Curl Error: ' . curl_error($ch));
+        $error = curl_error($ch);
+        curl_close($ch);
+        throw new Exception('Curl Error: ' . $error);
     }
 
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
+
+    if ($httpCode < 200 || $httpCode >= 300) {
+        throw new Exception('HTTP request failed with status ' . $httpCode);
+    }
 
     return json_decode($result, true);
 }

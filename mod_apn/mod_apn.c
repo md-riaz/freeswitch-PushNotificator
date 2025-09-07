@@ -929,7 +929,7 @@ static void originate_register_event_handler(switch_event_t *event)
         {
                 // Prevent negative or zero timelimit
                 switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn: Invalid timelimit_sec before try originate (%d), skipping originate for callId '%s'\n", *originate_data->timelimit, originate_data->x_call_id);
-                return;
+                goto end;
         }
         else if (*originate_data->timelimit > 30)
         {

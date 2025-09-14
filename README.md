@@ -105,18 +105,15 @@ Use `type=im` for chat or text notifications so `pn-im-tok` is delivered instead
    # Add to configure.ac configuration for create Makefile for mod_apn (AC_CONFIG_FILES array section)
    sed -i '/src\/mod\/endpoints\/mod_sofia\/Makefile/a src\/mod\/endpoints\/mod_apn\/Makefile' configure.ac
    autoreconf -fvi
-   ./configure --prefix=/usr --libdir=/usr/lib
-   # Now modulesdir resolves to /usr/lib/freeswitch/mod
+   ./configure
+
    ```
 
 3. **Compile and install only the module:**
    ```sh
    # Build just the target
-   make mod_apn
-
-   # Install just this module into the packaged module directory
-   sudo make mod_apn-install
-   # This places mod_apn.so under your system modules directory.
+   make
+   make install
    ```
 
 ---

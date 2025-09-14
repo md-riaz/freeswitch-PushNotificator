@@ -1,12 +1,37 @@
-# Freeswitch PushNotification module
-mod_apn: Push notifications module of VoIP telephony system [Freeswitch](http://freeswitch.org)<br>
-Module APN listens to `sofia::register` event, parses `Contact` header from SIP REGISTER and store all necessary information to db.<br>  
-In case if Freeswitch generate a call to target, which has stored token(s), endpoint `apn_wait` send http request to push server (cloud based or server based) with all info regarding device (platform, push token and so on)<br>
-Mod APN listens to `sofia::register` event and originate call when receive new REGISTER SIP message from target device.
+# Freeswitch PushNotification module (mod_apn)
+Push notifications module for FreeSWITCH, designed for deployments such as [FusionPBX](https://www.fusionpbx.com/).
+
+> **This guide assumes FreeSWITCH is already installed and running. You do NOT need to install or recompile FreeSWITCH. You only need to build and install this module.**
+
+---
+
+## Overview
+
+`mod_apn` listens to `sofia::register` events, parses the `Contact` header from SIP REGISTER, and stores device push notification tokens (VoIP and IM) into your database. When a call is generated to a user with a stored token, the endpoint `apn_wait` sends an HTTP request to your push server (FCM/APNs) with all info regarding the device.
+
+---
+
 ## Dependencies
-```
-libcurl
-```
+
+- `libcurl`
+
+## Prerequisites
+
+1. **Discover your FreeSWITCH version and modules directory:**
+   ```sh
+   freeswitch -version
+   ```
+
+2. **Install build prerequisites (dev headers only):**
+   ```sh
+   sudo apt-get update
+   sudo apt-get install -y git build-essential autoconf automake libtool pkg-config \
+     freeswitch-dev
+   # freeswitch-dev provides headers & pkg-config needed to build modules
+   ```
+
+---
+
 ## Credential setup
 
 ### Firebase service-account.json
@@ -59,21 +84,53 @@ Use `type=im` for chat or text notifications so `pn-im-tok` is delivered instead
 }
 ```
 
-## Installation
+## Build and Install mod_apn
+
+1. **Clone and register the module:**
+   ```sh
+   mkdir -p /usr/src && cd /usr/src/
+   git clone https://github.com/md-riaz/freeswitch-PushNotificator.git PushNotification
+   sudo cp -a ./PushNotification/mod_apn /usr/src/freeswitch/src/mod/endpoints/
+
+   cd /usr/src/freeswitch
+   # Add module to build list if not already present
+   echo 'endpoints/mod_apn' >> modules.conf
+   ```
+
+   > **Tip:** You are only editing the local source tree. Do not touch or overwrite your live FreeSWITCH installation.
+
+2. **Re-bootstrap and configure the build system (safe):**
+   ```sh
+   cd /usr/src/freeswitch
+   # Add to configure.ac configuration for create Makefile for mod_apn (AC_CONFIG_FILES array section)
+   sed -i '/src\/mod\/endpoints\/mod_sofia\/Makefile/a src\/mod\/endpoints\/mod_apn\/Makefile' configure.ac
+   autoreconf -fvi
+   ./configure
+   # This updates automake files to include only the new module.
+   ```
+
+3. **Compile and install only the module:**
+   ```sh
+   # Build just the target
+   make mod_apn
+
+   # Install just this module into the packaged module directory
+   sudo make mod_apn-install
+   # This places mod_apn.so under your system modules directory.
+   ```
+
+---
+
+## Sanity Check
+
+Make sure the module was installed (adjust directory if different):
 ```sh
-$ mkdir -p /usr/src && cd /usr/src/
-$ git clone https://github.com/md-riaz/freeswitch-PushNotificator.git PushNotification
-$ cp -a ./PushNotification/mod_apn /usr/src/freeswitch/src/mod/endpoints/
-$ cd /usr/src/freeswitch
-# Add to modules.conf parameter for build mod_apn
-echo 'endpoints/mod_apn' >> modules.conf
-# Add to configure.ac configuration for create Makefile for mod_apn (AC_CONFIG_FILES array section)
-$ sed -i '/src\/mod\/endpoints\/mod_sofia\/Makefile/a src\/mod\/endpoints\/mod_apn\/Makefile' configure.ac
-$ autoreconf -fvi
-$ ./configure
-$ make
-$ make install
+ls /usr/lib/freeswitch/mod | grep mod_apn || \
+ls /usr/lib/x86_64-linux-gnu/freeswitch/mod | grep mod_apn
 ```
+
+---
+
 ## Configuration
 Change apn.conf.xml with your configuration of url to push server and all parameters.
 ```sh

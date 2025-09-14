@@ -109,7 +109,7 @@ Use `type=im` for chat or text notifications so `pn-im-tok` is delivered instead
 
    ```
 
-3. **Compile and install only the module:**
+3. **Compile and install:**
    ```sh
    # Build just the target
    make

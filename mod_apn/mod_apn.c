@@ -12,6 +12,7 @@ SWITCH_MODULE_DEFINITION(mod_apn, mod_apn_load, mod_apn_shutdown, NULL);
 #define SWITCH_LESS_THAN(x, y)				     \
 	(((FS_VERSION_MAJOR == x) && (FS_VERSION_MINOR == y)) || \
 	 ((FS_VERSION_MAJOR == x) && (FS_VERSION_MINOR < y)) || (FS_VERSION_MAJOR < x))
+#define APN_MAX_TIMELIMIT_SEC 30
 
 static switch_event_node_t *register_event = NULL;
 static switch_event_node_t *push_event = NULL;
@@ -922,8 +923,8 @@ static void originate_register_event_handler(switch_event_t *event)
 	}
         if (!originate_data->timelimit)
         {
-                timelimit_sec = 30;
-                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn: Missing timelimit before try originate, resetting current_timelimit to default 30s for callId '%s'\n", originate_data->x_call_id);
+       timelimit_sec = APN_MAX_TIMELIMIT_SEC;
+       switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn: Missing timelimit before try originate, resetting current_timelimit to default %ds for callId '%s'\n", APN_MAX_TIMELIMIT_SEC, originate_data->x_call_id);
         }
         else if (*originate_data->timelimit <= 0)
         {
@@ -931,11 +932,11 @@ static void originate_register_event_handler(switch_event_t *event)
                 switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn: Invalid timelimit_sec before try originate (%d), skipping originate for callId '%s'\n", *originate_data->timelimit, originate_data->x_call_id);
                 goto end;
         }
-        else if (*originate_data->timelimit > 30)
+else if (*originate_data->timelimit > APN_MAX_TIMELIMIT_SEC)
         {
                 // Clamp to maximum allowed value
-                timelimit_sec = 30;
-                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn: Invalid timelimit_sec before try originate (%d), resetting current_timelimit to default 30s for callId '%s'\n", *originate_data->timelimit, originate_data->x_call_id);
+       timelimit_sec = APN_MAX_TIMELIMIT_SEC;
+       switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn: Invalid timelimit_sec before try originate (%d), resetting current_timelimit to default %ds for callId '%s'\n", *originate_data->timelimit, APN_MAX_TIMELIMIT_SEC, originate_data->x_call_id);
         }
         else
         {
@@ -1300,10 +1301,13 @@ static switch_call_cause_t apn_wait_outgoing_channel(switch_core_session_t *sess
 		}
 	}
 
-	if (timelimit_sec <= 0)
-	{
-		timelimit_sec = 60;
-	}
+       if (timelimit_sec <= 0 || timelimit_sec > APN_MAX_TIMELIMIT_SEC)
+       {
+               switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG,
+                               "mod_apn: Invalid timelimit_sec (%d), resetting to default %ds for callId '%s'\n",
+                                timelimit_sec, APN_MAX_TIMELIMIT_SEC, x_call_id);
+               timelimit_sec = APN_MAX_TIMELIMIT_SEC;
+       }
 
 	current_timelimit = timelimit_sec;
 
@@ -1413,11 +1417,11 @@ static switch_call_cause_t apn_wait_outgoing_channel(switch_core_session_t *sess
 	{
 		diff = (int)(switch_epoch_time_now(NULL) - start);
 		current_timelimit = timelimit_sec - diff;
-		if (current_timelimit > 30 || current_timelimit <= 0)
-		{
-			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn: Invalid time left: %d for callId: %s Current epoch time: %ld, Start time: %ld, Timelimitsec: %d, diff: %d \n", current_timelimit, x_call_id, switch_epoch_time_now(NULL), start, timelimit_sec, diff);
-			break;
-		}
+               if (current_timelimit > APN_MAX_TIMELIMIT_SEC || current_timelimit <= 0)
+               {
+                       switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn: Invalid time left: %d for callId: %s Current epoch time: %ld, Start time: %ld, Timelimitsec: %d, diff: %d \n", current_timelimit, x_call_id, switch_epoch_time_now(NULL), start, timelimit_sec, diff);
+                       break;
+               }
 
 		if (wait_any_register != SWITCH_TRUE)
 		{
@@ -1465,12 +1469,12 @@ static switch_call_cause_t apn_wait_outgoing_channel(switch_core_session_t *sess
 			}
 
 #if SWITCH_LESS_THAN(1, 8)
-			if (switch_ivr_originate(session, new_session, &cause, destination, (current_timelimit > 30 || current_timelimit <= 0) ? 30 : current_timelimit, NULL,
+                       if (switch_ivr_originate(session, new_session, &cause, destination, (current_timelimit > APN_MAX_TIMELIMIT_SEC || current_timelimit <= 0) ? APN_MAX_TIMELIMIT_SEC : current_timelimit, NULL,
 									 cid_name_override, cid_num_override, outbound_profile, var_event, flags,
 									 cancel_cause) == SWITCH_STATUS_SUCCESS)
 			{
 #else
-			if (switch_ivr_originate(session, new_session, &cause, destination, (current_timelimit > 30 || current_timelimit <= 0) ? 30 : current_timelimit, NULL,
+                       if (switch_ivr_originate(session, new_session, &cause, destination, (current_timelimit > APN_MAX_TIMELIMIT_SEC || current_timelimit <= 0) ? APN_MAX_TIMELIMIT_SEC : current_timelimit, NULL,
 									 cid_name_override, cid_num_override, outbound_profile, var_event, flags,
 									 cancel_cause, NULL) == SWITCH_STATUS_SUCCESS)
 			{

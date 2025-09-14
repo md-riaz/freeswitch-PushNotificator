@@ -1300,9 +1300,12 @@ static switch_call_cause_t apn_wait_outgoing_channel(switch_core_session_t *sess
 		}
 	}
 
-	if (timelimit_sec <= 0)
+	if (timelimit_sec <= 0 || timelimit_sec > 30)
 	{
-		timelimit_sec = 60;
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG,
+				"mod_apn: Invalid timelimit_sec (%d), resetting to default 30s for callId '%s'\n",
+				 timelimit_sec, x_call_id);
+		timelimit_sec = 30;
 	}
 
 	current_timelimit = timelimit_sec;

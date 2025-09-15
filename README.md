@@ -1,8 +1,7 @@
 # Freeswitch PushNotification module (mod_apn)
 Push notifications module for FreeSWITCH, designed for deployments such as [FusionPBX](https://www.fusionpbx.com/).
 
-> **This guide assumes FreeSWITCH is already installed and running. You do NOT need to install or recompile FreeSWITCH. You only need to build and install this module.**
-
+> **This guide assumes FreeSWITCH is already installed and running. You may either rebuild FreeSWITCH to include this module or compile and install the module separately on an existing system.**
 ---
 
 ## Overview
@@ -99,25 +98,39 @@ Use `type=im` for chat or text notifications so `pn-im-tok` is delivered instead
 
    > **Tip:** You are only editing the local source tree. Do not touch or overwrite your live FreeSWITCH installation.
 
-2. **Re-bootstrap and configure the build system (safe):**
+2. **Re-bootstrap and configure the build system:**
    ```sh
    cd /usr/src/freeswitch
    # Add to configure.ac configuration for create Makefile for mod_apn (AC_CONFIG_FILES array section)
    sed -i '/src\/mod\/endpoints\/mod_sofia\/Makefile/a src\/mod\/endpoints\/mod_apn\/Makefile' configure.ac
    autoreconf -fvi
    ./configure
-
    ```
 
-3. **Compile and install:**
-   ```sh
-   # Build just the target
-   make
-   make install
-   ```
+### Option A: Rebuild FreeSWITCH with mod_apn
+
+Rebuild and install the entire FreeSWITCH tree with the new module:
+
+```sh
+cd /usr/src/freeswitch
+make
+sudo make install
+```
+
+### Option B: Build only the module
+
+Compile and install just `mod_apn` without rebuilding the rest of FreeSWITCH:
+
+```sh
+cd /usr/src/freeswitch
+make mod_apn
+sudo make mod_apn-install
+# or from inside the module directory:
+cd src/mod/endpoints/mod_apn
+make && sudo make install
+```
 
 ---
-
 ## Sanity Check
 
 Make sure the module was installed (adjust directory if different):
@@ -129,10 +142,13 @@ ls /usr/lib/x86_64-linux-gnu/freeswitch/mod | grep mod_apn
 ---
 
 ## Configuration
-Change apn.conf.xml with your configuration of url to push server and all parameters.
+Change `apn.conf.xml` with your configuration of the push-server URL and related parameters.
+
 ```sh
-$ cp /usr/src/PushNotification/conf/autoload_configs/apn.conf.xml /etc/freeswitch/autoload_configs/
-$ sudo cp /usr/src/freeswitch/src/mod/endpoints/mod_apn/.libs/mod_apn.so /usr/lib/freeswitch/mod/
+sudo cp /usr/src/PushNotification/conf/autoload_configs/apn.conf.xml /etc/freeswitch/autoload_configs/
+
+# If `make mod_apn-install` or `make install` did not copy the module automatically
+sudo cp /usr/src/freeswitch/src/mod/endpoints/mod_apn/.libs/mod_apn.so /usr/lib/freeswitch/mod/
 ```
 
 ### Module configuration

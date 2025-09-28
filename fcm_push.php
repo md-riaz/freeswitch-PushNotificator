@@ -92,7 +92,7 @@ function parseDeviceToken($input)
 }
 
 /**
- * Send FCM push notification using JSON payload.
+ * Send FCM silent push notification using JSON payload.
  */
 function sendPushNotification($token, $deviceToken, $projectId, $data = [])
 {
@@ -102,16 +102,6 @@ function sendPushNotification($token, $deviceToken, $projectId, $data = [])
             'data' => $data,
             'android' => [
                 'priority' => 'high'
-            ],
-            'apns' => [
-                'headers' => [
-                    'apns-priority' => '10'
-                ],
-                'payload' => [
-                    'aps' => [
-                        'content-available' => 1
-                    ]
-                ]
             ]
         ]
     ];
@@ -173,8 +163,9 @@ function sendVoipPushNotification($deviceToken, $data = [])
     curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
     curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_2_0);
     curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'apns-expiration: 5',
         'authorization: bearer ' . $jwt,
-        'apns-topic: ' . APNS_BUNDLE_ID,
+        'apns-topic: ' . APNS_BUNDLE_ID . '.voip', // VoIP requires .voip suffix
         'apns-push-type: voip',
         'apns-priority: 10',
         'content-type: application/json'

@@ -152,7 +152,6 @@ function getApnsJwt()
         throw new Exception('Failed to parse APNs private key. Ensure it is a valid, unencrypted .p8 file.');
     }
     openssl_sign("$header.$claims", $signature, $privateKey, 'sha256');
-    openssl_free_key($privateKey);
 
     return "$header.$claims." . base64UrlEncode($signature);
 }

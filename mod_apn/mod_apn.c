@@ -944,8 +944,9 @@ else if (*originate_data->timelimit > APN_MAX_TIMELIMIT_SEC)
                 timelimit_sec = *originate_data->timelimit;
         }
 
-	destination = switch_mprintf("[registration_token=%s,originate_timeout=%u]sofia/%s/%s:_:[originate_timeout=%u,enable_send_apn=false,apn_wait_any_register=%s]apn_wait/%s@%s",
+	destination = switch_mprintf("[registration_token=%s,destination_number=%s,originate_timeout=%u]sofia/%s/%s:_:[originate_timeout=%u,enable_send_apn=false,apn_wait_any_register=%s]apn_wait/%s@%s",
 								 event_call_id,
+								 dial_user,
 								 timelimit_sec,
 								 event_profile,
 								 dest,

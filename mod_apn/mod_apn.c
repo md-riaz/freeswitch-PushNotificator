@@ -133,6 +133,34 @@ static void execute_sql_now(char **sqlp)
 	*sqlp = NULL;
 }
 
+static void mod_apn_delete_token(const char *token, const char *app_id, const char *realm, const char *extension)
+{
+        char *sql = NULL;
+
+        if (zstr(token) || zstr(app_id) || zstr(realm) || zstr(extension))
+        {
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING,
+                                "mod_apn: Cannot delete expired token, missing context (token/app_id/realm/extension)\n");
+                return;
+        }
+
+        sql = switch_mprintf("DELETE FROM push_tokens WHERE token = '%q' AND app_id = '%q' AND realm = '%q' AND extension = '%q'",
+                        token, app_id, realm, extension);
+
+        if (!sql)
+        {
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,
+                                "mod_apn: Failed to allocate SQL for deleting token '%s'\n", token);
+                return;
+        }
+
+        execute_sql_now(&sql);
+
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO,
+                        "mod_apn: Queued removal of expired token '%s' for app_id '%s', realm '%s', extension '%s'\n",
+                        token, app_id, realm, extension);
+}
+
 static int do_curl(switch_event_t *event, profile_t *profile)
 {
 	switch_CURL *curl_handle = NULL;
@@ -264,6 +292,15 @@ static switch_bool_t mod_apn_send(switch_event_t *event, profile_t *profile)
 	}
 	else
 	{
+		if (http_code == 410)
+		{
+			const char *token = switch_event_get_header(event, "token");
+			const char *app_id = switch_event_get_header(event, "app_id");
+			const char *user = switch_event_get_header(event, "user");
+			const char *realm = switch_event_get_header(event, "realm");
+
+			mod_apn_delete_token(token, app_id, realm, user);
+		}
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING,
 						  "APN request failed with HTTP code: %d\n", http_code);
 	}

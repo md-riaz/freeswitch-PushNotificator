@@ -16,6 +16,86 @@ define('APNS_TEAM_ID', 'YOUR_TEAM_ID'); // Apple developer team ID
 define('APNS_BUNDLE_ID', 'com.example.app.voip'); // VoIP bundle identifier
 define('APNS_HOST', 'api.push.apple.com'); // Use api.development.push.apple.com for sandbox
 
+class PushServiceException extends Exception
+{
+}
+
+class HttpRequestException extends Exception
+{
+    private int $statusCode;
+    private string $responseBody;
+
+    public function __construct(string $message, int $statusCode, string $responseBody = '', ?Throwable $previous = null)
+    {
+        parent::__construct($message, $statusCode, $previous);
+        $this->statusCode = $statusCode;
+        $this->responseBody = $responseBody;
+    }
+
+    public function getStatusCode(): int
+    {
+        return $this->statusCode;
+    }
+
+    public function getResponseBody(): string
+    {
+        return $this->responseBody;
+    }
+}
+
+class APNsException extends PushServiceException
+{
+    private int $status;
+    private string $responseBody;
+
+    public function __construct(string $message, int $status, string $responseBody = '', ?Throwable $previous = null)
+    {
+        parent::__construct($message, $status, $previous);
+        $this->status = $status;
+        $this->responseBody = $responseBody;
+    }
+
+    public function getStatus(): int
+    {
+        return $this->status;
+    }
+
+    public function getResponseBody(): string
+    {
+        return $this->responseBody;
+    }
+}
+
+class FCMException extends PushServiceException
+{
+    private int $status;
+    private ?string $errorCode;
+    private string $responseBody;
+
+    public function __construct(string $message, int $status, ?string $errorCode = null, string $responseBody = '', ?Throwable $previous = null)
+    {
+        parent::__construct($message, $status, $previous);
+        $this->status = $status;
+        $this->errorCode = $errorCode;
+        $this->responseBody = $responseBody;
+    }
+
+    public function getStatus(): int
+    {
+        return $this->status;
+    }
+
+    public function getErrorCode(): ?string
+    {
+        return $this->errorCode;
+    }
+
+    public function getResponseBody(): string
+    {
+        return $this->responseBody;
+    }
+}
+
 /**
  * Get Firebase project ID and credentials from JSON.
  */
@@ -106,17 +186,50 @@ function sendPushNotification($token, $deviceToken, $projectId, $data = [])
         ]
     ];
 
-    $response = httpPost(
-        "https://fcm.googleapis.com/v1/projects/$projectId/messages:send",
-        json_encode($payload),
-        [
-            'Authorization: Bearer ' . $token,
-            'Content-Type: application/json'
-        ]
-    );
+    try {
+        $response = httpPost(
+            "https://fcm.googleapis.com/v1/projects/$projectId/messages:send",
+            json_encode($payload),
+            [
+                'Authorization: Bearer ' . $token,
+                'Content-Type: application/json'
+            ]
+        );
+    } catch (HttpRequestException $e) {
+        $errorCode = null;
+        $body = $e->getResponseBody();
+        if (!empty($body)) {
+            $decoded = json_decode($body, true);
+            if (isset($decoded['error']['status'])) {
+                $errorCode = $decoded['error']['status'];
+            }
+            if (isset($decoded['error']['details']) && is_array($decoded['error']['details'])) {
+                foreach ($decoded['error']['details'] as $detail) {
+                    if (is_array($detail) && isset($detail['errorCode'])) {
+                        $errorCode = $detail['errorCode'];
+                        break;
+                    }
+                }
+            }
+        }
+
+        throw new FCMException(
+            $errorCode ? 'FCM Error: ' . $errorCode : 'FCM Error: HTTP ' . $e->getStatusCode(),
+            $e->getStatusCode(),
+            $errorCode,
+            $body,
+            $e
+        );
+    }
 
     if (empty($response['name'])) {
-        throw new Exception(empty($response) ? 'Failed to send push notification.' : json_encode($response));
+        $body = json_encode($response);
+        throw new FCMException(
+            'FCM Error: Missing response name',
+            500,
+            null,
+            $body === 'null' ? '' : $body
+        );
     }
 
     logMessage("Notification sent successfully. Response ID: {$response['name']}"); // Log success
@@ -174,14 +287,16 @@ function sendVoipPushNotification($deviceToken, $data = [])
     $result = curl_exec($ch);
 
     if (curl_errno($ch)) {
-        throw new Exception('Curl Error: ' . curl_error($ch));
+        $error = curl_error($ch);
+        curl_close($ch);
+        throw new APNsException('APNs transport error: ' . $error, 0);
     }
 
     $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
 
     if ($status != 200) {
-        throw new Exception('APNs Error: ' . $result);
+        throw new APNsException('APNs Error', $status, (string)$result);
     }
 
     logMessage("VoIP notification sent successfully. Response: {$result}");
@@ -206,17 +321,24 @@ function httpPost($url, $data, $headers)
     if (curl_errno($ch)) {
         $error = curl_error($ch);
         curl_close($ch);
-        throw new Exception('Curl Error: ' . $error);
+        throw new HttpRequestException('Curl Error: ' . $error, 0);
     }
 
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
 
+    $decoded = json_decode($result, true);
+
     if ($httpCode < 200 || $httpCode >= 300) {
-        throw new Exception('HTTP request failed with status ' . $httpCode);
+        $message = 'HTTP request failed with status ' . $httpCode;
+        if (!empty($result)) {
+            $message .= ': ' . $result;
+        }
+
+        throw new HttpRequestException($message, $httpCode, (string)$result);
     }
 
-    return json_decode($result, true);
+    return $decoded;
 }
 
 /**
@@ -270,9 +392,24 @@ try {
         sendPushNotification($accessToken, $deviceToken, $credentials['project_id'], $dataPayload);
     }
 
+    http_response_code(200);
     logMessage("Push notification sent to device token: $deviceToken with data: " . json_encode($inputData)); // Log success
 
+} catch (PushServiceException $e) {
+    $errorMessage = $e->getMessage();
+    logMessage("Error: " . $errorMessage); // Log error
+
+    if (($e instanceof APNsException && $e->getStatus() === 410) ||
+        ($e instanceof FCMException && strtoupper((string)$e->getErrorCode()) === 'UNREGISTERED')) {
+        http_response_code(410);
+    } else {
+        http_response_code(500);
+    }
+
+    echo "Error: " . $errorMessage . "\n";
 } catch (Exception $e) {
-    logMessage("Error: " . $e->getMessage()); // Log error
-    echo "Error: " . $e->getMessage() . "\n";
+    $errorMessage = $e->getMessage();
+    logMessage("Error: " . $errorMessage); // Log error
+    http_response_code(500);
+    echo "Error: " . $errorMessage . "\n";
 }

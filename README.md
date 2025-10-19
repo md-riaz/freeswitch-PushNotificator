@@ -8,6 +8,8 @@ Push notifications module for FreeSWITCH, designed for deployments such as [Fusi
 
 `mod_apn` listens to `sofia::register` events, parses the `Contact` header from SIP REGISTER, and stores device push notification tokens (VoIP and IM) into your database. When a call is generated to a user with a stored token, the endpoint `apn_wait` sends an HTTP request to your push server (FCM/APNs) with all info regarding the device.
 
+Expired or invalid tokens are now reported with HTTP 410 responses from `fcm_push.php`, and `mod_apn` will automatically remove those entries from the `push_tokens` table when APNs returns the same status.
+
 ---
 
 ## Dependencies

@@ -181,7 +181,7 @@ function sendVoipPushNotification($deviceToken, $data = [])
     curl_close($ch);
 
     if ($status != 200) {
-        throw new Exception('APNs Error: ' . $result);
+        throw new Exception('APNs Error (' . $status . '): ' . $result);
     }
 
     logMessage("VoIP notification sent successfully. Response: {$result}");
@@ -212,11 +212,18 @@ function httpPost($url, $data, $headers)
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
 
+    $decoded = json_decode($result, true);
+
     if ($httpCode < 200 || $httpCode >= 300) {
-        throw new Exception('HTTP request failed with status ' . $httpCode);
+        $message = 'HTTP request failed with status ' . $httpCode;
+        if (!empty($result)) {
+            $message .= ': ' . $result;
+        }
+
+        throw new Exception($message);
     }
 
-    return json_decode($result, true);
+    return $decoded;
 }
 
 /**
@@ -270,9 +277,16 @@ try {
         sendPushNotification($accessToken, $deviceToken, $credentials['project_id'], $dataPayload);
     }
 
+    http_response_code(200);
     logMessage("Push notification sent to device token: $deviceToken with data: " . json_encode($inputData)); // Log success
 
 } catch (Exception $e) {
-    logMessage("Error: " . $e->getMessage()); // Log error
-    echo "Error: " . $e->getMessage() . "\n";
+    $errorMessage = $e->getMessage();
+    logMessage("Error: " . $errorMessage); // Log error
+    if (stripos($errorMessage, 'UNREGISTERED') !== false || preg_match('/\b410\b/', $errorMessage)) {
+        http_response_code(410);
+    } else {
+        http_response_code(500);
+    }
+    echo "Error: " . $errorMessage . "\n";
 }

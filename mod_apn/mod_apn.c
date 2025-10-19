@@ -135,57 +135,30 @@ static void execute_sql_now(char **sqlp)
 
 static void mod_apn_delete_token(const char *token, const char *app_id, const char *realm, const char *extension)
 {
-	switch_cache_db_handle_t *dbh = NULL;
-	char *sql = NULL;
-	char *errmsg = NULL;
+        char *sql = NULL;
 
-	if (zstr(token) || zstr(app_id) || zstr(realm) || zstr(extension))
-	{
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING,
-				"mod_apn: Cannot delete expired token, missing context (token/app_id/realm/extension)\n");
-		return;
-	}
+        if (zstr(token) || zstr(app_id) || zstr(realm) || zstr(extension))
+        {
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING,
+                                "mod_apn: Cannot delete expired token, missing context (token/app_id/realm/extension)\n");
+                return;
+        }
 
-	if (!(dbh = mod_apn_get_db_handle()))
-	{
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING,
-				"mod_apn: Error opening DB when deleting expired token '%s'\n", token);
-		return;
-	}
+        sql = switch_mprintf("DELETE FROM push_tokens WHERE token = '%q' AND app_id = '%q' AND realm = '%q' AND extension = '%q'",
+                        token, app_id, realm, extension);
 
-	sql = switch_mprintf("DELETE FROM push_tokens WHERE token = '%q' AND app_id = '%q' AND realm = '%q' AND extension = '%q'",
-			token, app_id, realm, extension);
+        if (!sql)
+        {
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,
+                                "mod_apn: Failed to allocate SQL for deleting token '%s'\n", token);
+                return;
+        }
 
-	if (!sql)
-	{
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,
-				"mod_apn: Failed to allocate SQL for deleting token '%s'\n", token);
-		goto end;
-	}
+        execute_sql_now(&sql);
 
-	switch_mutex_lock(globals.dbh_mutex);
-	switch_cache_db_execute_sql_callback(dbh, sql, NULL, NULL, &errmsg);
-	switch_mutex_unlock(globals.dbh_mutex);
-
-	if (errmsg)
-	{
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,
-				"mod_apn: SQL error removing token '%s': %s\n", token, errmsg);
-		free(errmsg);
-	}
-	else
-	{
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO,
-				"mod_apn: Removed expired token '%s' for app_id '%s', realm '%s', extension '%s'\n",
-				token, app_id, realm, extension);
-	}
-
-end:
-	switch_safe_free(sql);
-	if (dbh)
-	{
-		switch_cache_db_release_db_handle(&dbh);
-	}
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO,
+                        "mod_apn: Queued removal of expired token '%s' for app_id '%s', realm '%s', extension '%s'\n",
+                        token, app_id, realm, extension);
 }
 
 static int do_curl(switch_event_t *event, profile_t *profile)

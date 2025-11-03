@@ -378,7 +378,7 @@ try {
         'platform' => $inputData['platform'] ?? '',
         'cid_name' => $inputData['cid_name'] ?? '',
         'cid_number' => $inputData['cid_number'] ?? '',
-        'payload' => json_decode($inputData['payload'] ?? 'null', true)
+        // 'payload' => json_decode($inputData['payload'] ?? 'null', true)
     ];
 
     $type = strtolower($inputData['type'] ?? '');

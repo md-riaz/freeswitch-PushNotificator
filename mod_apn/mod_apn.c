@@ -88,6 +88,8 @@ enum apn_state
 };
 
 static void push_event_handler(switch_event_t *event);
+/* Forward declaration to avoid implicit declaration when used earlier in the file */
+static switch_bool_t mod_apn_execute_sql_callback(char *sql, switch_core_db_callback_func_t callback, void *pdata);
 
 struct response_event_data
 {
@@ -135,30 +137,49 @@ static void execute_sql_now(char **sqlp)
 
 static void mod_apn_delete_token(const char *token, const char *app_id, const char *realm, const char *extension)
 {
-        char *sql = NULL;
+    char *sql = NULL;
 
-        if (zstr(token) || zstr(app_id) || zstr(realm) || zstr(extension))
-        {
-                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING,
-                                "mod_apn: Cannot delete expired token, missing context (token/app_id/realm/extension)\n");
-                return;
-        }
+    /* Always log parameters so we can trace why token removal may not happen */
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG,
+                      "mod_apn: mod_apn_delete_token called with token='%s' app_id='%s' realm='%s' extension='%s'\n",
+                      token ? token : "(null)", app_id ? app_id : "(null)", realm ? realm : "(null)", extension ? extension : "(null)");
 
-        sql = switch_mprintf("DELETE FROM push_tokens WHERE token = '%q' AND app_id = '%q' AND realm = '%q' AND extension = '%q'",
-                        token, app_id, realm, extension);
+    if (zstr(token) || zstr(app_id) || zstr(realm) || zstr(extension))
+    {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING,
+                        "mod_apn: Cannot delete expired token, missing context (token/app_id/realm/extension)\n");
+        return;
+    }
 
-        if (!sql)
-        {
-                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,
-                                "mod_apn: Failed to allocate SQL for deleting token '%s'\n", token);
-                return;
-        }
+    sql = switch_mprintf("DELETE FROM push_tokens WHERE token = '%q' AND app_id = '%q' AND realm = '%q' AND extension = '%q'",
+                    token, app_id, realm, extension);
 
+    if (!sql)
+    {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,
+                        "mod_apn: Failed to allocate SQL for deleting token '%s'\n", token);
+        return;
+    }
+
+    /* If the SQL queue manager is available, queue the delete (existing behavior).
+       If not, fall back to immediate execution so we don't silently lose a delete. */
+    if (globals.qm) {
         execute_sql_now(&sql);
-
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO,
                         "mod_apn: Queued removal of expired token '%s' for app_id '%s', realm '%s', extension '%s'\n",
                         token, app_id, realm, extension);
+    } else {
+        /* Fallback synchronous removal */
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO,
+                        "mod_apn: Executing immediate removal of expired token '%s' for app_id '%s', realm '%s', extension '%s'\n",
+                        token, app_id, realm, extension);
+
+        /* Use the existing helper to execute SQL synchronously (no callback needed) */
+        if (!mod_apn_execute_sql_callback(sql, NULL, NULL)) {
+            /* mod_apn_execute_sql_callback currently returns SWITCH_FALSE always — ignore return but this keeps behavior clear */
+        }
+        switch_safe_free(sql);
+    }
 }
 
 static int do_curl(switch_event_t *event, profile_t *profile)
@@ -289,20 +310,35 @@ static switch_bool_t mod_apn_send(switch_event_t *event, profile_t *profile)
 	if (http_code >= 200 && http_code < 300)
 	{
 		ret = SWITCH_TRUE;
-	}
-	else
-	{
+	} else {
+		/* Log the HTTP status at a higher level so operators can see failures without debug enabled */
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "mod_apn: APN request failed with HTTP code: %d\n", http_code);
+
 		if (http_code == 410)
 		{
+			/* When APN returns 410 (Unregistered) remove the token from DB.
+			   Log the values we will use for deletion so we can debug missing removals. */
 			const char *token = switch_event_get_header(event, "token");
 			const char *app_id = switch_event_get_header(event, "app_id");
 			const char *user = switch_event_get_header(event, "user");
 			const char *realm = switch_event_get_header(event, "realm");
 
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO,
+							  "mod_apn: APN returned 410 for token='%s' app_id='%s' user='%s' realm='%s'\n",
+							  token ? token : "(null)", app_id ? app_id : "(null)", user ? user : "(null)", realm ? realm : "(null)");
+
 			mod_apn_delete_token(token, app_id, realm, user);
+		} else {
+			
+			const char *token = switch_event_get_header(event, "token");
+			const char *app_id = switch_event_get_header(event, "app_id");
+			const char *user = switch_event_get_header(event, "user");
+			const char *realm = switch_event_get_header(event, "realm");
+			// log that http code is not 410
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO,
+							  "mod_apn: APN returned http code is not 410 for token='%s' app_id='%s' user='%s' realm='%s'\n",
+							  token ? token : "(null)", app_id ? app_id : "(null)", user ? user : "(null)", realm ? realm : "(null)");
 		}
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING,
-						  "APN request failed with HTTP code: %d\n", http_code);
 	}
 
 	return ret;
@@ -958,22 +994,22 @@ static void originate_register_event_handler(switch_event_t *event)
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn:. No destination contact data string\n");
 		goto end;
 	}
-        if (!originate_data->timelimit)
-        {
-       timelimit_sec = APN_MAX_TIMELIMIT_SEC;
-       switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn: Missing timelimit before try originate, resetting current_timelimit to default %ds for callId '%s'\n", APN_MAX_TIMELIMIT_SEC, originate_data->x_call_id);
-        }
+		if (!originate_data->timelimit)
+		{
+	       timelimit_sec = APN_MAX_TIMELIMIT_SEC;
+	       switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn: Missing timelimit before try originate, resetting current_timelimit to default %ds for callId '%s'\n", APN_MAX_TIMELIMIT_SEC, originate_data->x_call_id ? originate_data->x_call_id : "(null)");
+		}
         else if (*originate_data->timelimit <= 0)
         {
                 // Prevent negative or zero timelimit
-                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn: Invalid timelimit_sec before try originate (%d), skipping originate for callId '%s'\n", *originate_data->timelimit, originate_data->x_call_id);
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn: Invalid timelimit_sec before try originate (%d), skipping originate for callId '%s'\n", *originate_data->timelimit, originate_data->x_call_id ? originate_data->x_call_id : "(null)");
                 goto end;
         }
 else if (*originate_data->timelimit > APN_MAX_TIMELIMIT_SEC)
         {
                 // Clamp to maximum allowed value
-       timelimit_sec = APN_MAX_TIMELIMIT_SEC;
-       switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn: Invalid timelimit_sec before try originate (%d), resetting current_timelimit to default %ds for callId '%s'\n", *originate_data->timelimit, APN_MAX_TIMELIMIT_SEC, originate_data->x_call_id);
+	timelimit_sec = APN_MAX_TIMELIMIT_SEC;
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn: Invalid timelimit_sec before try originate (%d), resetting current_timelimit to default %ds for callId '%s'\n", *originate_data->timelimit, APN_MAX_TIMELIMIT_SEC, originate_data->x_call_id ? originate_data->x_call_id : "(null)");
         }
         else
         {
@@ -995,7 +1031,7 @@ else if (*originate_data->timelimit > APN_MAX_TIMELIMIT_SEC)
 	originate_data->destination = switch_core_strdup(pool, destination);
 	switch_mutex_unlock(handles_mutex);
 
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn:. Try originate to '%s' (by registration event) for callId '%s' \n", destination, originate_data->x_call_id);
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn:. Try originate to '%s' (by registration event) for callId '%s' \n", destination, originate_data->x_call_id ? originate_data->x_call_id : "(null)");
 	switch_safe_free(destination);
 
 end:
@@ -1309,17 +1345,23 @@ static switch_call_cause_t apn_wait_outgoing_channel(switch_core_session_t *sess
 		const char *sip_h_x_call_id = switch_event_get_header(var_event, "sip_h_X-Call-ID");
 		const char *sip_h_X_sip_call_id = switch_event_get_header(var_event, "sip_h_X-sip_call_id");
 
-		if (sip_h_x_call_id)
-		{
+		/* Prefer X-Call-ID header, fall back to X-sip_call_id if present. Log both header lookups and the chosen value. */
+
+		if (sip_h_x_call_id) {
 			x_call_id = sip_h_x_call_id;
-		}
-		else if (sip_h_X_sip_call_id)
-		{
+		} else if (sip_h_X_sip_call_id) {
 			x_call_id = sip_h_X_sip_call_id;
 		}
+
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG,
+			"mod_apn: sip header lookup: X-Call-ID='%s', X-sip_call_id='%s' -> x_call_id='%s'\n",
+			sip_h_x_call_id ? sip_h_x_call_id : "(null)",
+			sip_h_X_sip_call_id ? sip_h_X_sip_call_id : "(null)",
+			x_call_id ? x_call_id : "(null)");
 	}
 
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Fire event APN for User: %s@%s with call type: %s\n", user, domain, x_call_id);
+	/* Safe logging: x_call_id may be NULL in some cases, avoid passing NULL to %s */
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Fire event APN for User: %s@%s with call type: %s\n", user, domain, x_call_id ? x_call_id : "(null)");
 
 	switch_uuid_str(apn_response.uuid, sizeof(apn_response.uuid));
 	switch_mutex_init(&apn_response.mutex, SWITCH_MUTEX_NESTED, pool);
@@ -1340,10 +1382,10 @@ static switch_call_cause_t apn_wait_outgoing_channel(switch_core_session_t *sess
 
        if (timelimit_sec <= 0 || timelimit_sec > APN_MAX_TIMELIMIT_SEC)
        {
-               switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG,
-                               "mod_apn: Invalid timelimit_sec (%d), resetting to default %ds for callId '%s'\n",
-                                timelimit_sec, APN_MAX_TIMELIMIT_SEC, x_call_id);
-               timelimit_sec = APN_MAX_TIMELIMIT_SEC;
+	       switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG,
+			       "mod_apn: Invalid timelimit_sec (%d), resetting to default %ds for callId '%s'\n",
+				timelimit_sec, APN_MAX_TIMELIMIT_SEC, x_call_id ? x_call_id : "(null)");
+	       timelimit_sec = APN_MAX_TIMELIMIT_SEC;
        }
 
 	current_timelimit = timelimit_sec;
@@ -1394,14 +1436,21 @@ static switch_call_cause_t apn_wait_outgoing_channel(switch_core_session_t *sess
 				switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "aleg_uuid", "");
 			}
 		       if (zstr(x_call_id) && channel)
-		       {
-			       x_call_id = switch_channel_get_variable(channel, "sip_call_id");
-		       }
-			if (!zstr(x_call_id))
-			{
-				/* include SIP Call-ID so external services can correlate the push with the call */
-				switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "x_call_id", x_call_id);
-			}
+	       {
+		       /* Try fallback to channel variable 'sip_call_id' if header wasn't present */
+		       x_call_id = switch_channel_get_variable(channel, "sip_call_id");
+		       switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn: Fallback lookup: channel variable 'sip_call_id' -> '%s'\n", x_call_id ? x_call_id : "(null)");
+	       }
+		if (!zstr(x_call_id))
+		{
+			/* include SIP Call-ID so external services can correlate the push with the call */
+			switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "x_call_id", x_call_id);
+		}
+		else
+		{
+			/* Extra warning-level log so missing call ids are easy to find in logs */
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "mod_apn: SIP Call-ID (x_call_id) is missing for user %s@%s; correlation will be limited\n", user, domain);
+		}
 
 			// get caller info
 			if (!cid_name_override)
@@ -1446,7 +1495,7 @@ static switch_call_cause_t apn_wait_outgoing_channel(switch_core_session_t *sess
 	if ((int)(switch_epoch_time_now(NULL) - start) > timelimit_sec)
 	{
 		// Timelimit expired
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn: Timelimit expired for callId: %s Current epoch time: %ld, Start time: %ld, Timelimitsec: %d, diff: %d \n", x_call_id, switch_epoch_time_now(NULL), start, timelimit_sec, diff);
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn: Timelimit expired for callId: %s Current epoch time: %ld, Start time: %ld, Timelimitsec: %d, diff: %d \n", x_call_id ? x_call_id : "(null)", switch_epoch_time_now(NULL), start, timelimit_sec, diff);
 		goto done;
 	}
 
@@ -1456,7 +1505,7 @@ static switch_call_cause_t apn_wait_outgoing_channel(switch_core_session_t *sess
 		current_timelimit = timelimit_sec - diff;
                if (current_timelimit > APN_MAX_TIMELIMIT_SEC || current_timelimit <= 0)
                {
-                       switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn: Invalid time left: %d for callId: %s Current epoch time: %ld, Start time: %ld, Timelimitsec: %d, diff: %d \n", current_timelimit, x_call_id, switch_epoch_time_now(NULL), start, timelimit_sec, diff);
+					   switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn: Invalid time left: %d for callId: %s Current epoch time: %ld, Start time: %ld, Timelimitsec: %d, diff: %d \n", current_timelimit, x_call_id ? x_call_id : "(null)", switch_epoch_time_now(NULL), start, timelimit_sec, diff);
                        break;
                }
 
@@ -1479,13 +1528,13 @@ static switch_call_cause_t apn_wait_outgoing_channel(switch_core_session_t *sess
 
 		if (channel && !switch_channel_ready(channel))
 		{
-			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn: Skip originate, Channel Not Ready '%s'\n", x_call_id);
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn: Skip originate, Channel Not Ready '%s'\n", x_call_id ? x_call_id : "(null)");
 			break;
 		}
 
 		if (cancel_cause && *cancel_cause > 0)
 		{
-			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn: Skip originate, cancel_cause > 0 '%d' for '%s'\n", *cancel_cause, x_call_id);
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn: Skip originate, cancel_cause > 0 '%d' for '%s'\n", *cancel_cause, x_call_id ? x_call_id : "(null)");
 			break;
 		}
 

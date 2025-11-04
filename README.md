@@ -150,6 +150,7 @@ Change `apn.conf.xml` with your configuration of the push-server URL and related
 sudo cp /usr/src/PushNotification/conf/autoload_configs/apn.conf.xml /etc/freeswitch/autoload_configs/
 
 # If `make mod_apn-install` or `make install` did not copy the module automatically
+sudo cp /usr/src/freeswitch/src/mod/endpoints/mod_apn/.libs/mod_apn.so /usr/lib/freeswitch/mod
 sudo cp /usr/src/freeswitch/src/mod/endpoints/mod_apn/.libs/mod_apn.so /usr/lib/x86_64-linux-gnu/freeswitch/mod
 ```
 

@@ -51,9 +51,9 @@
 			<!-- Optional parameter. Will be added header Content-Type with value from this parameter -->
 			<param name="content_type" value=""/>
 			<!-- Optional parameter. Libcurl connect_timeout parameter, sec -->
-			<param name="connect_timeout" value="300"/>
+			<param name="connect_timeout" value="5"/>
 			<!-- Optional parameter. CURL timeout parameter, sec -->
-			<param name="timeout" value="0"/>
+			<param name="timeout" value="15"/>
 			<!-- Post body template use variables:
 					${type}, - voip or im
 					${app_id}, - application id from db (whatever you set to `contact_app_id_param`)

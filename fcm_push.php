@@ -276,7 +276,7 @@ function sendVoipPushNotification($deviceToken, $data = [])
     curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
     curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_2_0);
     curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        'apns-expiration: 5',
+        'apns-expiration: 0',
         'authorization: bearer ' . $jwt,
         'apns-topic: ' . APNS_BUNDLE_ID . '.voip', // VoIP requires .voip suffix
         'apns-push-type: voip',

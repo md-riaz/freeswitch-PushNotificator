@@ -1,0 +1,29 @@
+--- a/index.lua
++++ b/index.lua
+@@ -958,8 +958,24 @@
+ 							dial_string_user = dial_string_user .. "presence_id=" .. row.destination_number .. "@"..domain_name..",";
+ 							dial_string_user = dial_string_user .. "extension_uuid="..extension_uuid..record_session.."]";
+ 							user_contact = api:executeString("sofia_contact */".. row.destination_number .."@" ..domain_name);
+-							if (user_contact ~= "error/user_not_registered") then
+-								-- dial_string = dial_string_user .. user_contact;
++							if (ring_group_strategy == "simultaneous") then
++								if user_contact and user_contact ~= "" and not user_contact:match("^error/") and not user_contact:match("^%-ERR") then
++									dial_string = dial_string_user .. user_contact;
++								end
++								-- shortcut: a missing push_tokens table disables push legs; production install checks the table first
++								local push_token = dbh:first_value("select 1 from push_tokens where extension = :extension and realm = :realm and type = 'voip' limit 1", {extension = row.destination_number, realm = domain_name});
++								if row.domain_name == domain_name and domain_name:match("^[%w.-]+$") and row.destination_number:match("^[%w_.+-]+$") and push_token ~= nil then
++									local push_leg = dial_string_user:sub(1, -2) .. ",ring_group_push_user=" .. row.destination_number
++										.. ",ring_group_push_domain=" .. domain_name .. ",ring_group_push_timeout=" .. destination_timeout
++										.. ",ring_group_push_uuid=" .. session:get_uuid() .. ",process_cdr=false";
++									local sip_call_id = session:getVariable("sip_h_X-sip_call_id");
++									if not sip_call_id or sip_call_id == "" then sip_call_id = session:getVariable("sip_call_id") or ""; end
++									if not sip_call_id:match("^[%w._@-]+$") then sip_call_id = session:get_uuid(); end
++									push_leg = push_leg .. ",ring_group_push_call_id=" .. sip_call_id .. "]loopback/ring_group_push/ring_group_push/XML";
++									dial_string = dial_string and (dial_string .. "," .. push_leg) or push_leg;
++									session:setVariable("loopback_no_pre_answer", "true");
++								end
++							elseif (user_contact ~= "error/user_not_registered") then
+ 								dial_string = dial_string_user .. user_contact .. ":_:apn_wait/" .. row.destination_number .. "@" .. domain_name;
+ 							end
+ 							if (verto_enabled == 'true') then

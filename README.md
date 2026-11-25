@@ -47,7 +47,7 @@ To generate a private key file for your service account:
 1. Sign in to the [Apple Developer portal](https://developer.apple.com/).
 2. In **Certificates, Identifiers & Profiles**, create a new key and enable **Apple Push Notifications service (APNs)**.
 3. Download the resulting `AuthKey_<KEY_ID>.p8` file and rename it to `AuthKey.p8`, placing it alongside `fcm_push.php`.
-4. Record the **Key ID** and your **Team ID**; configure `APNS_KEY_ID`, `APNS_TEAM_ID`, and `APNS_BUNDLE_ID` constants in `fcm_push.php` with these values and your VoIP bundle identifier.
+4. Record the **Key ID** and your **Team ID**; configure `APNS_KEY_ID`, `APNS_TEAM_ID`, and `APNS_BUNDLE_ID` constants in `fcm_push.php` with these values and your app's plain bundle identifier (for example `com.example.app`, without `.voip`). `fcm_push.php` appends `.voip` to build the `apns-topic`.
 5. For sandbox testing, change the `APNS_HOST` constant in `fcm_push.php` to `api.development.push.apple.com`.
 
 ### Push token parameters
@@ -201,7 +201,7 @@ sudo cp /usr/src/freeswitch/src/mod/endpoints/mod_apn/.libs/mod_apn.so /usr/lib/
     <!-- URI template parameter with variables: ${type}, ${user}, ${realm}, ${token}, ${app_id}, ${platform}, ${x_call_id} -->
     <param name="url" value="http://somedomain.com/?type=${type}&app_id=${app_id}&user=${user}&realm=${realm}&token=${token}&platform=${platform}&payload=${payload}&aleg_uuid=${aleg_uuid}&cid_name=${cid_name}&cid_number=${cid_number}&x_call_id=${x_call_id}"/>
     <!-- Supported methods: GET and POST -->
-    <param name="method" value="post"/>
+    <param name="method" value="get"/>
     <!-- Optional parameter. Supported auth types: None, JWT, DIGEST, BASIC -->
     <!--<param name="auth_type" value="digest"/> -->
     <!-- Optional parameter. For JWT add token only, for digest or basic: login:password -->
@@ -209,10 +209,10 @@ sudo cp /usr/src/freeswitch/src/mod/endpoints/mod_apn/.libs/mod_apn.so /usr/lib/
     <!-- Optional parameter. Will be added header Content-Type with value from this parameter -->
     <!--<param name="content_type" value=""/> -->
     <!-- Optional parameter. Libcurl connect_timeout parameter, sec -->
-    <param name="connect_timeout" value="300"/>
+    <param name="connect_timeout" value="5"/>
     <!-- Optional parameter. CURL timeout parameter, sec -->
-    <param name="timeout" value="0"/>
-    <!-- Post body template use variables:
+    <param name="timeout" value="15"/>
+    <!-- Post body template (used only when method is post). Variables:
             ${type}, - voip or im
             ${app_id}, - application id from db (whatever you set to `contact_app_id_param`)
             ${user}, - user extension number
@@ -246,21 +246,12 @@ You can configure `url` and `body` for your http request with template variables
  - `${app_id}` - application id
  - `${platform}` -  platform 
 
-Change your dial-string user's parameter for use endpoint `app_wait`
-```xml
-<include>
-  <user id="101">
-    <params>
-	  <!--...-->
-	  <param name="dial-string" value="${sofia_contact(${dialed_user}@${dialed_domain})}:_:apn_wait/${dialed_user}@${dialed_domain}"/>
-	  <!--...-->
-    </params>
-    <variables>
-	<!--...-->
-    </variables>
-  </user>
-</include>
-```
+## FusionPBX ring groups
+
+For FusionPBX ring groups, do not edit the user `dial-string` by hand. The repository ships a patch for FusionPBX's `app/ring_groups/index.lua` and a dialplan row that start the push in its own session, so a slow phone registration does not delay the other members. See [docs/fusionpbx-ring-groups.md](docs/fusionpbx-ring-groups.md) for requirements, installation, tests and rollback.
+
+For plain FreeSWITCH use without FusionPBX, set the endpoint in the user's dial string, for example `${sofia_contact(${dialed_user}@${dialed_domain})}:_:apn_wait/${dialed_user}@${dialed_domain}`.
+
 ## Auto load
 ```sh
 $ sed -i '/<load module="mod_sofia"\/>/a <load module="mod_apn"\/>' /etc/freeswitch/autoload_configs/modules.conf.xml

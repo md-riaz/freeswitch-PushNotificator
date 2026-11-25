@@ -13,7 +13,7 @@ define('LOG_FILE', __DIR__ . '/fcm_log.txt'); // New log file constant
 define('APNS_AUTH_KEY', __DIR__ . '/AuthKey.p8'); // Path to .p8 key file
 define('APNS_KEY_ID', 'YOUR_KEY_ID'); // Apple key ID
 define('APNS_TEAM_ID', 'YOUR_TEAM_ID'); // Apple developer team ID
-define('APNS_BUNDLE_ID', 'com.example.app.voip'); // VoIP bundle identifier
+define('APNS_BUNDLE_ID', 'com.example.app'); // Plain bundle ID without .voip (the code appends .voip)
 define('APNS_HOST', 'api.push.apple.com'); // Use api.development.push.apple.com for sandbox
 
 class PushServiceException extends Exception

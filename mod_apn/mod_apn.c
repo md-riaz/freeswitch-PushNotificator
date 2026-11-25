@@ -222,7 +222,7 @@ static int do_curl(switch_event_t *event, profile_t *profile)
 			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn: method: %s, url: %s, data: %s\n", method, query,
 							  post_data);
 			switch_curl_easy_setopt(curl_handle, CURLOPT_POSTFIELDSIZE, strlen(post_data));
-			switch_curl_easy_setopt(curl_handle, CURLOPT_POSTFIELDS, (void *)post_data);
+			switch_curl_easy_setopt(curl_handle, CURLOPT_COPYPOSTFIELDS, (void *)post_data);
 
 			if (post_data != profile->post_data_template)
 				switch_safe_free(post_data);

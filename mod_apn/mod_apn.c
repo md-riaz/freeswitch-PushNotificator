@@ -1738,7 +1738,11 @@ static switch_call_cause_t apn_wait_outgoing_channel(switch_core_session_t *sess
 				}
 				else
 				{
-					/* early media only: the INVITEd device is ended by SIP, send no cancel */
+					/* early media only: the INVITEd device is ended by SIP, send no cancel.
+					 * shortcut: other pushed devices of this user get no cancel and rely on the
+					 * app timeout. Ring-group push legs bridge with ignore_early_media=true, so
+					 * there originate succeeds only on answer. Track the leg's answer/hangup
+					 * events if direct calls with early media need it. */
 					skip_cancel = SWITCH_TRUE;
 				}
 

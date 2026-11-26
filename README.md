@@ -282,7 +282,7 @@ The bundled profile url appends `&action=${push_action}&reason=${cancel_reason}`
 
 Reasons:
 
-- `answered`: a device of the user answered. Other devices of the same user must stop ringing. The device that answered ignores it. The server sends `answered` only for a real answer, not for early media.
+- `answered`: a device of the user answered. Other devices of the same user must stop ringing. The device that answered ignores it. The server sends `answered` only for a real answer, not for early media. Known limit: if a device's INVITE returns early media (183) before it answers, the server sends no cancel for that wait, so the user's other pushed devices stop only on the app timeout. Ring-group push legs ignore early media, so this applies only to direct `apn_wait` dial strings without `ignore_early_media=true`.
 - `answered_elsewhere`: another leg of the call won the race.
 - `caller_hangup`: the caller hung up before anyone answered.
 - `timeout`: nobody answered in time.

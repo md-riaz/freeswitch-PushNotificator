@@ -15,6 +15,7 @@ define('APNS_KEY_ID', 'YOUR_KEY_ID'); // Apple key ID
 define('APNS_TEAM_ID', 'YOUR_TEAM_ID'); // Apple developer team ID
 define('APNS_BUNDLE_ID', 'com.example.app'); // Plain bundle ID without .voip (the code appends .voip)
 define('APNS_HOST', 'api.push.apple.com'); // Use api.development.push.apple.com for sandbox
+define('CANCEL_PUSH_ENABLED', false); // Forward action=cancel pushes. Enable only after the app handles them.
 
 class PushServiceException extends Exception
 {
@@ -364,6 +365,13 @@ try {
 
     if (empty($inputData)) {
         throw new Exception('No input provided.');
+    }
+
+    // Without app support a cancel push would show as a new incoming call.
+    if (($inputData['action'] ?? '') === 'cancel' && !CANCEL_PUSH_ENABLED) {
+        http_response_code(200);
+        echo 'Cancel push disabled';
+        exit;
     }
 
     $deviceToken = parseDeviceToken($inputData);

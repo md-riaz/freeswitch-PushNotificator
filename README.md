@@ -280,6 +280,8 @@ When `apn_wait` has sent an incoming-call push and then stops waiting, it fires 
 
 The bundled profile url appends `&action=${push_action}&reason=${cancel_reason}`, and `fcm_push.php` passes both to the app as `action` and `reason` next to `sip_call_id`. An empty `action` means an incoming call.
 
+`fcm_push.php` drops cancel pushes while `CANCEL_PUSH_ENABLED` is `false` (the default) and returns HTTP 200. An app that does not handle `action=cancel` would show a cancel push as a new incoming call, so set it to `true` only after the app release that handles it. The change takes effect on the next request; no FreeSWITCH reload is needed.
+
 Reasons:
 
 - `answered`: a device of the user answered. Other devices of the same user must stop ringing. The device that answered ignores it. The server sends `answered` only for a real answer, not for early media. Known limit: if a device's INVITE returns early media (183) before it answers, the server sends no cancel for that wait, so the user's other pushed devices stop only on the app timeout. Ring-group push legs ignore early media, so this applies only to direct `apn_wait` dial strings without `ignore_early_media=true`.

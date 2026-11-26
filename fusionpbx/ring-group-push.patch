@@ -1,6 +1,6 @@
---- a/index.lua
-+++ b/index.lua
-@@ -958,8 +958,24 @@
+--- a/index.lua	2026-11-26 11:59:19.137306053 +0600
++++ b/index.lua	2026-11-26 11:59:19.141306040 +0600
+@@ -958,8 +958,26 @@
  							dial_string_user = dial_string_user .. "presence_id=" .. row.destination_number .. "@"..domain_name..",";
  							dial_string_user = dial_string_user .. "extension_uuid="..extension_uuid..record_session.."]";
  							user_contact = api:executeString("sofia_contact */".. row.destination_number .."@" ..domain_name);
@@ -19,6 +19,8 @@
 +									local sip_call_id = session:getVariable("sip_h_X-sip_call_id");
 +									if not sip_call_id or sip_call_id == "" then sip_call_id = session:getVariable("sip_call_id") or ""; end
 +									if not sip_call_id:match("^[%w._@-]+$") then sip_call_id = session:get_uuid(); end
++									local push_caller_destination = session:getVariable("caller_destination");
++									if push_caller_destination and push_caller_destination:match("^[%w_.+*#@-]+$") then push_leg = push_leg .. ",caller_destination=" .. push_caller_destination; end
 +									push_leg = push_leg .. ",ring_group_push_call_id=" .. sip_call_id .. "]loopback/ring_group_push/ring_group_push/XML";
 +									dial_string = dial_string and (dial_string .. "," .. push_leg) or push_leg;
 +									session:setVariable("loopback_no_pre_answer", "true");

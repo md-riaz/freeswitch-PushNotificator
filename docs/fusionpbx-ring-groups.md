@@ -79,6 +79,8 @@ grep -E 'apn_wait/99999999|No one token found.*99999999|ring_group_push-b' /var/
 
 The log must show the `bridge` to `apn_wait/99999999@<your-domain>`, the line `No one token found`, and `loopback/ring_group_push-b [NO_ANSWER]`. If no `bridge` line appears, the route did not match. Check the row and the cache file before you continue.
 
+The patched script also passes the A-leg `caller_destination` to the push leg. The FusionPBX global dialplans keep it, so the mobile INVITE carries the dialed number in `X-caller_destination` instead of `ring_group_push`.
+
 ### 4. Patch the ring-group script
 
 Patch a copy, check it, and then install it:

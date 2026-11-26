@@ -372,6 +372,8 @@ try {
         'type' => $inputData['type'] ?? '',
         'call_id' => $inputData['aleg_uuid'] ?? '',
         'sip_call_id' => $inputData['x_call_id'] ?? '',
+        'action' => $inputData['action'] ?? '',
+        'reason' => $inputData['reason'] ?? '',
         'app_id' => $inputData['app_id'] ?? '',
         'user' => $inputData['user'] ?? '',
         'realm' => $inputData['realm'] ?? '',

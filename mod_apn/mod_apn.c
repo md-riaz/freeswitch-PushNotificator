@@ -1265,6 +1265,46 @@ static switch_call_cause_t apn_wait_outgoing_channel(switch_core_session_t *sess
 switch_io_routines_t apn_wait_io_routines = {
 	/*.outgoing_channel */ apn_wait_outgoing_channel};
 
+static const char *apn_cancel_reason(switch_call_cause_t cause)
+{
+	switch (cause) {
+	case SWITCH_CAUSE_LOSE_RACE:
+	case SWITCH_CAUSE_PICKED_OFF:
+		return "answered_elsewhere";
+	case SWITCH_CAUSE_ORIGINATOR_CANCEL:
+		return "caller_hangup";
+	case SWITCH_CAUSE_NO_ANSWER:
+	case SWITCH_CAUSE_NO_USER_RESPONSE:
+	case SWITCH_CAUSE_ALLOTTED_TIMEOUT:
+		return "timeout";
+	default:
+		return "ended";
+	}
+}
+
+static void apn_send_cancel_push(const char *user, const char *realm, const char *aleg_uuid, const char *x_call_id, const char *reason)
+{
+	switch_event_t *event = NULL;
+
+	if (switch_event_create_subclass(&event, SWITCH_EVENT_CUSTOM, "mobile::push::notification") != SWITCH_STATUS_SUCCESS)
+	{
+		return;
+	}
+	switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "type", "voip");
+	switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "user", user);
+	switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "realm", realm);
+	switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "aleg_uuid", aleg_uuid ? aleg_uuid : "");
+	if (!zstr(x_call_id))
+	{
+		switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "x_call_id", x_call_id);
+	}
+	switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "push_action", "cancel");
+	switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "cancel_reason", reason);
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "mod_apn: Fire cancel push for %s@%s, x_call_id '%s', reason '%s'\n",
+					  user, realm, x_call_id ? x_call_id : "", reason);
+	switch_event_fire(&event);
+}
+
 static switch_call_cause_t apn_wait_outgoing_channel(switch_core_session_t *session,
 													 switch_event_t *var_event,
 													 switch_caller_profile_t *outbound_profile,
@@ -1294,6 +1334,8 @@ static switch_call_cause_t apn_wait_outgoing_channel(switch_core_session_t *sess
 							   NULL};
 	switch_time_t start = 0;
 	int diff = 0;
+	switch_bool_t push_fired = SWITCH_FALSE;
+	const char *cancel_reason = NULL;
 
 	if (var_event && !zstr(switch_event_get_header(var_event, "originate_reg_token")))
 	{
@@ -1488,6 +1530,7 @@ static switch_call_cause_t apn_wait_outgoing_channel(switch_core_session_t *sess
 			}
 			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn: Fire event APN for User: %s@%s\n", user, domain);
 			switch_event_fire(&event);
+			push_fired = SWITCH_TRUE;
 			switch_event_destroy(&event);
 		}
 	}
@@ -1496,6 +1539,7 @@ static switch_call_cause_t apn_wait_outgoing_channel(switch_core_session_t *sess
 	{
 		// Timelimit expired
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn: Timelimit expired for callId: %s Current epoch time: %ld, Start time: %ld, Timelimitsec: %d, diff: %d \n", x_call_id ? x_call_id : "(null)", switch_epoch_time_now(NULL), start, timelimit_sec, diff);
+		cancel_reason = "timeout";
 		goto done;
 	}
 
@@ -1506,6 +1550,7 @@ static switch_call_cause_t apn_wait_outgoing_channel(switch_core_session_t *sess
                if (current_timelimit > APN_MAX_TIMELIMIT_SEC || current_timelimit <= 0)
                {
 					   switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn: Invalid time left: %d for callId: %s Current epoch time: %ld, Start time: %ld, Timelimitsec: %d, diff: %d \n", current_timelimit, x_call_id ? x_call_id : "(null)", switch_epoch_time_now(NULL), start, timelimit_sec, diff);
+                       cancel_reason = "timeout";
                        break;
                }
 
@@ -1529,12 +1574,14 @@ static switch_call_cause_t apn_wait_outgoing_channel(switch_core_session_t *sess
 		if (channel && !switch_channel_ready(channel))
 		{
 				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn: Skip originate, Channel Not Ready '%s'\n", x_call_id ? x_call_id : "(null)");
+			cancel_reason = apn_cancel_reason(switch_channel_get_cause(channel));
 			break;
 		}
 
 		if (cancel_cause && *cancel_cause > 0)
 		{
 				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn: Skip originate, cancel_cause > 0 '%d' for '%s'\n", *cancel_cause, x_call_id ? x_call_id : "(null)");
+			cancel_reason = apn_cancel_reason(*cancel_cause);
 			break;
 		}
 
@@ -1569,6 +1616,7 @@ static switch_call_cause_t apn_wait_outgoing_channel(switch_core_session_t *sess
 				switch_caller_profile_t *cp;
 				switch_channel_t *new_channel = NULL;
 
+				cancel_reason = "answered";
 				new_channel = switch_core_session_get_channel(*new_session);
 
 				if ((context = switch_channel_get_variable(new_channel, "context")))
@@ -1580,6 +1628,10 @@ static switch_call_cause_t apn_wait_outgoing_channel(switch_core_session_t *sess
 				}
 				switch_core_session_rwunlock(*new_session);
 			}
+			else
+			{
+				cancel_reason = apn_cancel_reason(cause);
+			}
 			break;
 		}
 		switch_cond_next();
@@ -1587,6 +1639,19 @@ static switch_call_cause_t apn_wait_outgoing_channel(switch_core_session_t *sess
 	}
 
 done:
+	if (push_fired)
+	{
+		switch_bool_t notsent;
+
+		switch_mutex_lock(apn_response.mutex);
+		notsent = apn_response.state == MOD_APN_NOTSENT ? SWITCH_TRUE : SWITCH_FALSE;
+		switch_mutex_unlock(apn_response.mutex);
+		if (!notsent)
+		{
+			apn_send_cancel_push(user, domain, var_event ? switch_event_get_header(var_event, "ent_originate_aleg_uuid") : NULL,
+								 x_call_id, cancel_reason ? cancel_reason : "ended");
+		}
+	}
 	if (response_event)
 	{
 		switch_event_unbind(&response_event);

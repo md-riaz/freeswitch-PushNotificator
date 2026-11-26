@@ -274,6 +274,22 @@ Mod APN store to db tokens when parse `Contact` header from REGISTER<br>
 In case if Freeswitch will genarate to `User 101` a call, endpoint `apn_wait` will send http request to push notification service with token ID and wait for incoming REGISTER request from current user.<br>
 After receiving SIP REGISTER, module will originate INVITE to `User 101`.
 
+### Cancel push
+
+When `apn_wait` has sent an incoming-call push and then stops waiting, it fires a second `mobile::push::notification` event for the same user and realm with the same `x_call_id`. The event carries `push_action=cancel` and a `cancel_reason`. `apn_wait` sends no cancel if the first push was reported as `notsent`.
+
+The bundled profile url appends `&action=${push_action}&reason=${cancel_reason}`, and `fcm_push.php` passes both to the app as `action` and `reason` next to `sip_call_id`. An empty `action` means an incoming call.
+
+Reasons:
+
+- `answered`: a device of the user answered. Other devices of the same user must stop ringing. The device that answered ignores it.
+- `answered_elsewhere`: another leg of the call won the race.
+- `caller_hangup`: the caller hung up before anyone answered.
+- `timeout`: nobody answered in time.
+- `ended`: the call ended for any other reason.
+
+On iOS the cancel arrives as a VoIP push, so the app must report a CallKit call for it and end that call at once if the `sip_call_id` is unknown. The app must ignore a cancel for the call it answered. Apps match pushes to calls by `sip_call_id` only.
+
 ## Send notification
 ### From event
 #### headers

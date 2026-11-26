@@ -13,7 +13,7 @@ The loopback leg sets `process_cdr=false`, so it does not write fake CDRs or mis
 The repository provides two files:
 
 - `fusionpbx/ring-group-push.patch`: a `diff -u` against FusionPBX's `app/ring_groups/index.lua`. The base file already contained this repository's older legacy edit, which appended `:_:apn_wait/<ext>@<domain>` to the dial strings of registered members. Other strategies keep that legacy path.
-- `fusionpbx/ring_group_push_dialplan.sql`: one `v_dialplans` row with context and number `ring_group_push` and the fixed UUID `30a6fe50-e391-4ec3-869d-14342bfa1bca`. It validates the call variables, runs `bridge` to `apn_wait/<user>@<domain>`, and then hangs up with `NO_ANSWER`. There is no Lua helper.
+- `fusionpbx/ring_group_push_dialplan.sql`: one `v_dialplans` row with context and number `ring_group_push` and the fixed UUID `30a6fe50-e391-4ec3-869d-14342bfa1bca`, plus its ten `v_dialplan_details` rows, stored the way FusionPBX stores a dialplan (fixed `app_uuid`, description). It validates the call variables, runs `bridge` to `apn_wait/<user>@<domain>`, and then hangs up with `NO_ANSWER`. There is no Lua helper.
 
 The patch was made against FusionPBX 5.3.4.
 
@@ -66,6 +66,10 @@ Add the row before you patch the script, so that no push leg can exist without i
 psql -h <db-host> -U <fusionpbx-db-user> -d fusionpbx -f $B/ring_group_push_dialplan.sql
 rm -f /var/cache/fusionpbx/dialplan.ring_group_push
 ```
+
+The row is global (`domain_uuid` is NULL). To find it in the FusionPBX web UI, log in as a superadmin and open Dialplans > Dialplan Manager. The default list shows it, because a superadmin sees global rows. You can also type `ring_group_push` in the search box, pick the `ring_group_push` entry in the context drop-down, or press Show All. Domain admins without the `dialplan_global` permission do not see global rows, as with every other global dialplan.
+
+Open the row to edit it. Saving it in the UI rebuilds `dialplan_xml` from the detail rows, so edit the details and not the XML by hand. The rebuilt XML has the same conditions, actions and attributes as the SQL file, with one trailing newline. Keep `Order` at 1 so that no global dialplan runs on the loopback leg, and clear the cache after each change (`rm -f /var/cache/fusionpbx/dialplan.ring_group_push`).
 
 ### 3. Route test
 
@@ -155,6 +159,25 @@ update v_dialplans set dialplan_order = 1
 rm -f /var/cache/fusionpbx/dialplan.ring_group_push
 ```
 
+Installs that inserted the older row with only `dialplan_xml` filled (no `app_uuid`, no detail rows) do not show in Dialplan Manager, because the list query contains `app_uuid <> 'c03b422e-13a8-bd1b-e42b-b6b9b4d27ce4'` and a NULL `app_uuid` fails that comparison. Either delete the row and run the new SQL file, or convert it in place:
+
+```sql
+begin;
+update v_dialplans
+   set app_uuid = '29014e83-6d59-43f1-bb63-13b722ce13c2',
+       dialplan_description = 'Ring-group push wait for mod_apn (internal loopback leg)',
+       insert_date = coalesce(insert_date, now())
+ where dialplan_uuid = '30a6fe50-e391-4ec3-869d-14342bfa1bca' and dialplan_context = 'ring_group_push';
+-- then run the INSERT INTO v_dialplan_details statement from fusionpbx/ring_group_push_dialplan.sql
+commit;
+```
+
+The existing `dialplan_xml` already matches what FusionPBX builds from these details, apart from the trailing newline, so the runtime behaviour does not change. Clear the cache afterwards:
+
+```sh
+rm -f /var/cache/fusionpbx/dialplan.ring_group_push
+```
+
 ## Rollback
 
 Restore the script first, which stops new push legs at once:
@@ -166,6 +189,7 @@ cmp $S $B/index.after.lua && install -o www-data -g www-data -m 0644 $B/index.be
 Then remove the dialplan row and the cache file:
 
 ```sql
+delete from v_dialplan_details where dialplan_uuid = '30a6fe50-e391-4ec3-869d-14342bfa1bca';
 delete from v_dialplans
  where dialplan_uuid = '30a6fe50-e391-4ec3-869d-14342bfa1bca' and dialplan_context = 'ring_group_push';
 ```

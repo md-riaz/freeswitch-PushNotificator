@@ -5,7 +5,7 @@ INSERT INTO v_dialplans (
     dialplan_order, dialplan_enabled, dialplan_continue, dialplan_xml
 ) VALUES (
     '30a6fe50-e391-4ec3-869d-14342bfa1bca', 'ring_group_push',
-    'ring_group_push', 'ring_group_push', 99, 'true', 'false',
+    'ring_group_push', 'ring_group_push', 1, 'true', 'false',
     $xml$<extension name="ring_group_push" continue="false" uuid="30a6fe50-e391-4ec3-869d-14342bfa1bca">
 	<condition field="destination_number" expression="^ring_group_push$"/>
 	<condition field="${channel_name}" expression="^loopback/ring_group_push-b$"/>

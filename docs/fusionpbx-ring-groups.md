@@ -79,6 +79,8 @@ grep -E 'apn_wait/99999999|No one token found.*99999999|ring_group_push-b' /var/
 
 The log must show the `bridge` to `apn_wait/99999999@<your-domain>`, the line `No one token found`, and `loopback/ring_group_push-b [NO_ANSWER]`. If no `bridge` line appears, the route did not match. Check the row and the cache file before you continue.
 
+The row must have the lowest `dialplan_order` in its context (`1` here, FusionPBX global dialplans start at `10`). Then the FusionPBX global dialplans do not run on the loopback leg and cannot rewrite the caller's exported `X-` headers. Every exported `sip_h_X-*` header reaches the mobile INVITE unchanged.
+
 ### 4. Patch the ring-group script
 
 Patch a copy, check it, and then install it:
@@ -139,6 +141,19 @@ Use a domain where the test extension has an app registered, so that `push_token
 5. CDRs: no new `v_xml_cdr` rows with `destination_number = 'ring_group_push'`.
 
 Useful log greps: `ring_group_push`, `Fire event APN for User`, `mobile::push::response`, `APN request failed`, `CURL Error`.
+
+## Upgrading
+
+Installs that created the `ring_group_push` row with `dialplan_order` 99 must lower it to 1, so the FusionPBX global dialplans do not run on the loopback leg:
+
+```sql
+update v_dialplans set dialplan_order = 1
+ where dialplan_uuid = '30a6fe50-e391-4ec3-869d-14342bfa1bca' and dialplan_context = 'ring_group_push';
+```
+
+```sh
+rm -f /var/cache/fusionpbx/dialplan.ring_group_push
+```
 
 ## Rollback
 

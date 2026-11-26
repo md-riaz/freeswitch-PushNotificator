@@ -276,7 +276,7 @@ After receiving SIP REGISTER, module will originate INVITE to `User 101`.
 
 ### Cancel push
 
-When `apn_wait` has sent an incoming-call push and then stops waiting, it fires a second `mobile::push::notification` event for the same user and realm with the same `x_call_id`. The event carries `push_action=cancel` and a `cancel_reason`. `apn_wait` sends no cancel if the first push was reported as `notsent`.
+When `apn_wait` has sent an incoming-call push and then stops waiting, it fires a second `mobile::push::notification` event for the same user and realm with the same `x_call_id`. The event carries `push_action=cancel` and a `cancel_reason`. `apn_wait` sends no cancel if the first push was reported as `notsent`. The cancel is sent only after the incoming push's result is `sent`, so it never overtakes it. If the call ends before the result arrives, `apn_wait` defers the cancel until it does.
 
 The bundled profile url appends `&action=${push_action}&reason=${cancel_reason}`, and `fcm_push.php` passes both to the app as `action` and `reason` next to `sip_call_id`. An empty `action` means an incoming call.
 

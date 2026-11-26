@@ -16,6 +16,9 @@ SWITCH_MODULE_DEFINITION(mod_apn, mod_apn_load, mod_apn_shutdown, NULL);
 
 static switch_event_node_t *register_event = NULL;
 static switch_event_node_t *push_event = NULL;
+static switch_event_node_t *pushes_response_node = NULL;
+static switch_hash_t *pushes = NULL;
+static switch_mutex_t *pushes_mutex = NULL;
 
 static struct
 {
@@ -1282,6 +1285,65 @@ static const char *apn_cancel_reason(switch_call_cause_t cause)
 	}
 }
 
+typedef struct
+{
+	char uuid[SWITCH_UUID_FORMATTED_LENGTH + 1]; /* hash key */
+	int state;			  /* MOD_APN_UNDEFINE / MOD_APN_SENT / MOD_APN_NOTSENT as seen by the global handler */
+	int cancel_pending;	  /* apn_wait ended before the response; send cancel when it arrives */
+	char *user, *realm, *aleg_uuid, *x_call_id, *reason; /* malloc'd copies, only when cancel_pending */
+} apn_push_track_t;
+
+static void apn_push_track_free(apn_push_track_t *e)
+{
+	if (!e)
+	{
+		return;
+	}
+	switch_safe_free(e->user);
+	switch_safe_free(e->realm);
+	switch_safe_free(e->aleg_uuid);
+	switch_safe_free(e->x_call_id);
+	switch_safe_free(e->reason);
+	free(e);
+}
+
+static void apn_push_track_destroy_all(void)
+{
+	switch_hash_index_t *hi;
+	apn_push_track_t **list = NULL;
+	apn_push_track_t *e;
+	void *val;
+	int n = 0, count = 0, i;
+
+	if (!pushes)
+	{
+		return;
+	}
+	/* collect first, then free: the hash must not change while iterating */
+	switch_mutex_lock(pushes_mutex);
+	for (hi = switch_core_hash_first(pushes); hi; hi = switch_core_hash_next(&hi))
+	{
+		count++;
+	}
+	if (count > 0 && (list = calloc(count, sizeof(*list))))
+	{
+		for (hi = switch_core_hash_first(pushes); hi && n < count; hi = switch_core_hash_next(&hi))
+		{
+			switch_core_hash_this(hi, NULL, NULL, &val);
+			e = (apn_push_track_t *)val;
+			list[n++] = e;
+		}
+	}
+	switch_core_hash_destroy(&pushes);
+	pushes = NULL;
+	switch_mutex_unlock(pushes_mutex);
+	for (i = 0; i < n; i++)
+	{
+		apn_push_track_free(list[i]);
+	}
+	switch_safe_free(list);
+}
+
 static void apn_send_cancel_push(const char *user, const char *realm, const char *aleg_uuid, const char *x_call_id, const char *reason)
 {
 	switch_event_t *event = NULL;
@@ -1303,6 +1365,42 @@ static void apn_send_cancel_push(const char *user, const char *realm, const char
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "mod_apn: Fire cancel push for %s@%s, x_call_id '%s', reason '%s'\n",
 					  user, realm, x_call_id ? x_call_id : "", reason);
 	switch_event_fire(&event);
+}
+
+static void apn_push_response_handler(switch_event_t *event)
+{
+	const char *uuid = switch_event_get_header(event, "uuid");
+	const char *response = switch_event_get_header(event, "response");
+	apn_push_track_t *e;
+	int sent;
+
+	if (zstr(uuid) || zstr(response))
+	{
+		return;
+	}
+	sent = !strcasecmp(response, "sent");
+
+	switch_mutex_lock(pushes_mutex);
+	e = switch_core_hash_find(pushes, uuid);
+	if (!e)
+	{
+		/* push not created by apn_wait (for example the apn API) */
+		switch_mutex_unlock(pushes_mutex);
+		return;
+	}
+	if (e->cancel_pending)
+	{
+		switch_core_hash_delete(pushes, uuid);
+		switch_mutex_unlock(pushes_mutex);
+		if (sent)
+		{
+			apn_send_cancel_push(e->user, e->realm, e->aleg_uuid, e->x_call_id, e->reason);
+		}
+		apn_push_track_free(e);
+		return;
+	}
+	e->state = sent ? MOD_APN_SENT : MOD_APN_NOTSENT;
+	switch_mutex_unlock(pushes_mutex);
 }
 
 static switch_call_cause_t apn_wait_outgoing_channel(switch_core_session_t *session,
@@ -1335,6 +1433,7 @@ static switch_call_cause_t apn_wait_outgoing_channel(switch_core_session_t *sess
 	switch_time_t start = 0;
 	int diff = 0;
 	switch_bool_t push_fired = SWITCH_FALSE;
+	switch_bool_t track_push = SWITCH_FALSE;
 	const char *cancel_reason = NULL;
 
 	if (var_event && !zstr(switch_event_get_header(var_event, "originate_reg_token")))
@@ -1529,6 +1628,21 @@ static switch_call_cause_t apn_wait_outgoing_channel(switch_core_session_t *sess
 				switch_safe_free(body);
 			}
 			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn: Fire event APN for User: %s@%s\n", user, domain);
+			if (wait_any_register == SWITCH_FALSE)
+			{
+				apn_push_track_t *e = calloc(1, sizeof(*e));
+
+				if (e)
+				{
+					switch_snprintf(e->uuid, sizeof(e->uuid), "%s", apn_response.uuid);
+					e->state = MOD_APN_UNDEFINE;
+					/* shortcut: an entry stays until its push response arrives; push_event_handler always sends one, so entries do not accumulate. Add expiry if that ever changes. */
+					switch_mutex_lock(pushes_mutex);
+					switch_core_hash_insert(pushes, e->uuid, e);
+					switch_mutex_unlock(pushes_mutex);
+					track_push = SWITCH_TRUE;
+				}
+			}
 			switch_event_fire(&event);
 			push_fired = SWITCH_TRUE;
 			switch_event_destroy(&event);
@@ -1639,18 +1753,42 @@ static switch_call_cause_t apn_wait_outgoing_channel(switch_core_session_t *sess
 	}
 
 done:
-	if (push_fired)
+	if (push_fired && track_push)
 	{
-		switch_bool_t notsent;
+		apn_push_track_t *e;
+		apn_push_track_t *done_e = NULL;
+		switch_bool_t fire_cancel = SWITCH_FALSE;
+		const char *aleg_uuid = var_event ? switch_event_get_header(var_event, "ent_originate_aleg_uuid") : NULL;
+		const char *reason = cancel_reason ? cancel_reason : "ended";
 
-		switch_mutex_lock(apn_response.mutex);
-		notsent = apn_response.state == MOD_APN_NOTSENT ? SWITCH_TRUE : SWITCH_FALSE;
-		switch_mutex_unlock(apn_response.mutex);
-		if (!notsent)
+		switch_mutex_lock(pushes_mutex);
+		if ((e = switch_core_hash_find(pushes, apn_response.uuid)))
 		{
-			apn_send_cancel_push(user, domain, var_event ? switch_event_get_header(var_event, "ent_originate_aleg_uuid") : NULL,
-								 x_call_id, cancel_reason ? cancel_reason : "ended");
+			if (e->state == MOD_APN_UNDEFINE)
+			{
+				e->cancel_pending = 1;
+				e->user = strdup(user);
+				e->realm = strdup(domain);
+				e->aleg_uuid = strdup(aleg_uuid ? aleg_uuid : "");
+				e->x_call_id = strdup(x_call_id ? x_call_id : "");
+				e->reason = strdup(reason);
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn: Defer cancel push for %s@%s until push response, x_call_id '%s'\n",
+								  user, domain, x_call_id ? x_call_id : "");
+			}
+			else
+			{
+				fire_cancel = e->state == MOD_APN_SENT ? SWITCH_TRUE : SWITCH_FALSE;
+				switch_core_hash_delete(pushes, apn_response.uuid);
+				done_e = e;
+			}
 		}
+		switch_mutex_unlock(pushes_mutex);
+
+		if (fire_cancel)
+		{
+			apn_send_cancel_push(user, domain, aleg_uuid, x_call_id, reason);
+		}
+		apn_push_track_free(done_e);
 	}
 	if (response_event)
 	{
@@ -1685,6 +1823,9 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_apn_load)
 		goto error;
 	}
 
+	switch_core_hash_init(&pushes);
+	switch_mutex_init(&pushes_mutex, SWITCH_MUTEX_NESTED, pool);
+
 	if (!init_sql())
 	{
 		goto error;
@@ -1699,6 +1840,13 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_apn_load)
 
 	/*Bind to event mobile::push::notification for send MobilePushNotification */
 	if ((switch_event_bind_removable(modname, SWITCH_EVENT_CUSTOM, "mobile::push::notification", push_event_handler, NULL, &push_event) != SWITCH_STATUS_SUCCESS))
+	{
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "mod_apn: Couldn't bind event!\n");
+		goto error;
+	}
+
+	/*Bind to event mobile::push::response to order cancel pushes after the incoming push*/
+	if ((switch_event_bind_removable(modname, SWITCH_EVENT_CUSTOM, "mobile::push::response", apn_push_response_handler, NULL, &pushes_response_node) != SWITCH_STATUS_SUCCESS))
 	{
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "mod_apn: Couldn't bind event!\n");
 		goto error;
@@ -1732,6 +1880,12 @@ error:
 		switch_event_unbind(&push_event);
 		push_event = NULL;
 	}
+	if (pushes_response_node)
+	{
+		switch_event_unbind(&pushes_response_node);
+		pushes_response_node = NULL;
+	}
+	apn_push_track_destroy_all();
 	if (globals.profile_hash)
 	{
 		switch_core_hash_destroy(&globals.profile_hash);
@@ -1757,6 +1911,12 @@ SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_apn_shutdown)
 		switch_event_unbind(&push_event);
 		push_event = NULL;
 	}
+	if (pushes_response_node)
+	{
+		switch_event_unbind(&pushes_response_node);
+		pushes_response_node = NULL;
+	}
+	apn_push_track_destroy_all();
 	if (globals.profile_hash)
 	{
 		switch_core_hash_destroy(&globals.profile_hash);

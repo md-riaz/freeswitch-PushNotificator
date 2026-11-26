@@ -1362,6 +1362,7 @@ static void apn_send_cancel_push(const char *user, const char *realm, const char
 	}
 	switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "push_action", "cancel");
 	switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "cancel_reason", reason);
+	switch_event_add_body(event, "%s", "{}");
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "mod_apn: Fire cancel push for %s@%s, x_call_id '%s', reason '%s'\n",
 					  user, realm, x_call_id ? x_call_id : "", reason);
 	switch_event_fire(&event);
@@ -1435,6 +1436,7 @@ static switch_call_cause_t apn_wait_outgoing_channel(switch_core_session_t *sess
 	switch_bool_t push_fired = SWITCH_FALSE;
 	switch_bool_t track_push = SWITCH_FALSE;
 	const char *cancel_reason = NULL;
+	switch_bool_t skip_cancel = SWITCH_FALSE;
 
 	if (var_event && !zstr(switch_event_get_header(var_event, "originate_reg_token")))
 	{
@@ -1628,7 +1630,6 @@ static switch_call_cause_t apn_wait_outgoing_channel(switch_core_session_t *sess
 				switch_safe_free(body);
 			}
 			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_apn: Fire event APN for User: %s@%s\n", user, domain);
-			if (wait_any_register == SWITCH_FALSE)
 			{
 				apn_push_track_t *e = calloc(1, sizeof(*e));
 
@@ -1730,8 +1731,16 @@ static switch_call_cause_t apn_wait_outgoing_channel(switch_core_session_t *sess
 				switch_caller_profile_t *cp;
 				switch_channel_t *new_channel = NULL;
 
-				cancel_reason = "answered";
 				new_channel = switch_core_session_get_channel(*new_session);
+				if (switch_channel_test_flag(new_channel, CF_ANSWERED))
+				{
+					cancel_reason = "answered";
+				}
+				else
+				{
+					/* early media only: the INVITEd device is ended by SIP, send no cancel */
+					skip_cancel = SWITCH_TRUE;
+				}
 
 				if ((context = switch_channel_get_variable(new_channel, "context")))
 				{
@@ -1764,7 +1773,12 @@ done:
 		switch_mutex_lock(pushes_mutex);
 		if ((e = switch_core_hash_find(pushes, apn_response.uuid)))
 		{
-			if (e->state == MOD_APN_UNDEFINE)
+			if (skip_cancel)
+			{
+				switch_core_hash_delete(pushes, apn_response.uuid);
+				done_e = e;
+			}
+			else if (e->state == MOD_APN_UNDEFINE)
 			{
 				e->cancel_pending = 1;
 				e->user = strdup(user);

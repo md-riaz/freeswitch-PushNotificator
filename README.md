@@ -282,13 +282,15 @@ The bundled profile url appends `&action=${push_action}&reason=${cancel_reason}`
 
 Reasons:
 
-- `answered`: a device of the user answered. Other devices of the same user must stop ringing. The device that answered ignores it.
+- `answered`: a device of the user answered. Other devices of the same user must stop ringing. The device that answered ignores it. The server sends `answered` only for a real answer, not for early media.
 - `answered_elsewhere`: another leg of the call won the race.
 - `caller_hangup`: the caller hung up before anyone answered.
 - `timeout`: nobody answered in time.
 - `ended`: the call ended for any other reason.
 
 On iOS the cancel arrives as a VoIP push, so the app must report a CallKit call for it and end that call at once if the `sip_call_id` is unknown. The app must ignore a cancel for the call it answered. Apps match pushes to calls by `sip_call_id` only.
+
+The server sends the cancel only after the incoming push was sent, but APNs and FCM do not guarantee delivery order, so a cancel can reach the device before the incoming push. The app must remember a cancelled `sip_call_id` it did not know for about 60 seconds and drop a later incoming push with the same `sip_call_id`. On iOS it must still report that push to CallKit and end the call at once, as PushKit requires.
 
 ## Send notification
 ### From event

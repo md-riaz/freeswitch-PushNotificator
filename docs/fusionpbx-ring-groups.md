@@ -142,6 +142,19 @@ Use a domain where the test extension has an app registered, so that `push_token
 
 Useful log greps: `ring_group_push`, `Fire event APN for User`, `mobile::push::response`, `APN request failed`, `CURL Error`.
 
+## Upgrading
+
+Installs that created the `ring_group_push` row with `dialplan_order` 99 must lower it to 1, so the FusionPBX global dialplans do not run on the loopback leg:
+
+```sql
+update v_dialplans set dialplan_order = 1
+ where dialplan_uuid = '30a6fe50-e391-4ec3-869d-14342bfa1bca' and dialplan_context = 'ring_group_push';
+```
+
+```sh
+rm -f /var/cache/fusionpbx/dialplan.ring_group_push
+```
+
 ## Rollback
 
 Restore the script first, which stops new push legs at once:
